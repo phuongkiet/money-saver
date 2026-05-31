@@ -63,46 +63,54 @@ const defaultUser: UserProfile = {
   avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Jack'
 };
 
+// Helper function to safely read from localStorage
+const getLocalStorageItem = <T,>(key: string, defaultValue: T): T => {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : defaultValue;
+  } catch (e) {
+    console.error(`Lỗi parse ${key} từ localStorage:`, e);
+    return defaultValue;
+  }
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('ms_transactions');
-    return saved ? JSON.parse(saved) : defaultTransactions;
-  });
+  const [transactions, setTransactions] = useState<Transaction[]>(() => 
+    getLocalStorageItem('ms_transactions', defaultTransactions)
+  );
 
-  const [categories, setCategories] = useState<Category[]>(() => {
-    const saved = localStorage.getItem('ms_categories');
-    return saved ? JSON.parse(saved) : defaultCategories;
-  });
+  const [categories, setCategories] = useState<Category[]>(() => 
+    getLocalStorageItem('ms_categories', defaultCategories)
+  );
 
-  const [wallets, setWallets] = useState<Wallet[]>(() => {
-    const saved = localStorage.getItem('ms_wallets');
-    return saved ? JSON.parse(saved) : defaultWallets;
-  });
+  const [wallets, setWallets] = useState<Wallet[]>(() => 
+    getLocalStorageItem('ms_wallets', defaultWallets)
+  );
 
-  const [debts, setDebts] = useState<Debt[]>(() => {
-    const saved = localStorage.getItem('ms_debts');
-    return saved ? JSON.parse(saved) : defaultDebts;
-  });
+  const [debts, setDebts] = useState<Debt[]>(() => 
+    getLocalStorageItem('ms_debts', defaultDebts)
+  );
 
-  const [user, setUser] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem('ms_user');
-    return saved ? JSON.parse(saved) : defaultUser;
-  });
+  const [user, setUser] = useState<UserProfile>(() => 
+    getLocalStorageItem('ms_user', defaultUser)
+  );
 
   const [theme, setThemeState] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem('ms_theme');
-    return (saved as 'light' | 'dark') || 'light';
+    try {
+      const saved = localStorage.getItem('ms_theme');
+      return (saved as 'light' | 'dark') || 'light';
+    } catch (e) {
+      return 'light';
+    }
   });
 
-  const [monthlySummaries, setMonthlySummaries] = useState<MonthlySummary[]>(() => {
-    const saved = localStorage.getItem('ms_monthly_summaries');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [monthlySummaries, setMonthlySummaries] = useState<MonthlySummary[]>(() => 
+    getLocalStorageItem('ms_monthly_summaries', [])
+  );
 
-  const [yearlySummaries, setYearlySummaries] = useState<YearlySummary[]>(() => {
-    const saved = localStorage.getItem('ms_yearly_summaries');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [yearlySummaries, setYearlySummaries] = useState<YearlySummary[]>(() => 
+    getLocalStorageItem('ms_yearly_summaries', [])
+  );
 
   useEffect(() => {
     localStorage.setItem('ms_transactions', JSON.stringify(transactions));

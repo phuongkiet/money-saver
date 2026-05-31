@@ -4,6 +4,22 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <script>
+      // Ngăn ngừa lỗi trắng màn hình (Chunk Load Error) khi deploy code mới
+      window.addEventListener('error', function (e) {
+        var message = e.message || '';
+        if (
+          message.indexOf('dynamically imported module') !== -1 ||
+          message.indexOf('Failed to fetch dynamically imported module') !== -1 ||
+          message.indexOf('Importing a module script failed') !== -1 ||
+          (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK') && e.target.src && e.target.src.indexOf('/assets/') !== -1)
+        ) {
+          console.warn('Phát hiện lỗi tải tài nguyên cũ do deploy code mới. Đang tự động tải lại phiên bản mới nhất...');
+          window.location.reload();
+        }
+      }, true);
+    </script>
     <title>Money Saver - Trợ Lý Quản Lý Chi Tiêu</title>
     
     <!-- Google Fonts: Be Vietnam Pro -->
