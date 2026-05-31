@@ -549,7 +549,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             user_name: user.name,
             to_email: toEmail,
             month_id: summary.monthId,
-            email_content: htmlReport
+            email_content: htmlReport,
+            title: `Báo cáo tài chính tháng ${summary.monthId.split('-')[1]}/${summary.monthId.split('-')[0]}`,
+            subject: `Báo cáo tài chính tháng ${summary.monthId.split('-')[1]}/${summary.monthId.split('-')[0]}`
           }
         })
       });
