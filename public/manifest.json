@@ -1,0 +1,19 @@
+{
+  "name": "Money Saver - Trợ Lý Quản Lý Chi Tiêu",
+  "short_name": "Money Saver",
+  "description": "Ứng dụng PWA quản lý chi tiêu cá nhân màu Sage Green iPhone 17 cực đẹp.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f6f3",
+  "theme_color": "#8fae8d",
+  "orientation": "portrait",
+  "categories": ["finance", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
