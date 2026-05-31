@@ -11,9 +11,9 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
 
   // Form states
-  const [name, setName] = useState('Đinh Minh Trí');
+  const [name, setName] = useState('');
   const [gender, setGender] = useState<'male' | 'female'>('male');
-  const [email, setEmail] = useState('kietnguyen1509@gmail.com');
+  const [email, setEmail] = useState('');
 
   const handleNext = () => {
     if (currentSlide < 3) {
@@ -148,22 +148,20 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                   <button
                     type="button"
                     onClick={() => setGender('male')}
-                    className={`flex-1 py-1.5 text-xs font-bold font-vietnam rounded-lg transition-all text-center ${
-                      gender === 'male'
-                        ? 'bg-white dark:bg-zinc-800 text-[#6f8d6d] shadow-sm font-semibold'
-                        : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-500'
-                    }`}
+                    className={`flex-1 py-1.5 text-xs font-bold font-vietnam rounded-lg transition-all text-center ${gender === 'male'
+                      ? 'bg-white dark:bg-zinc-800 text-[#6f8d6d] shadow-sm font-semibold'
+                      : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-500'
+                      }`}
                   >
                     Nam
                   </button>
                   <button
                     type="button"
                     onClick={() => setGender('female')}
-                    className={`flex-1 py-1.5 text-xs font-bold font-vietnam rounded-lg transition-all text-center ${
-                      gender === 'female'
-                        ? 'bg-white dark:bg-zinc-800 text-[#6f8d6d] shadow-sm font-semibold'
-                        : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-500'
-                    }`}
+                    className={`flex-1 py-1.5 text-xs font-bold font-vietnam rounded-lg transition-all text-center ${gender === 'female'
+                      ? 'bg-white dark:bg-zinc-800 text-[#6f8d6d] shadow-sm font-semibold'
+                      : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-500'
+                      }`}
                   >
                     Nữ
                   </button>
