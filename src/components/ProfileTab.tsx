@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconRenderer } from './IconRenderer';
-import { Sun, Moon, Plus, ArrowLeftRight, Download, Upload, Trash2, Smartphone, Building2, Wallet as WalletIcon, X, Mail, Settings, Send, Database } from 'lucide-react';
+import { Sun, Moon, Plus, ArrowLeftRight, Download, Upload, Trash2, Smartphone, Building2, Wallet as WalletIcon } from 'lucide-react';
 import { formatThousand, parseThousand } from '../utils/format';
 
 export const ProfileTab: React.FC = () => {
-  const { user, wallets, theme, setTheme, updateProfile, addWallet, transferFunds, resetData, deleteWallet, showToast, confirm, monthlySummaries, compactMonthData, sendEmailJSReport, generateEmailHTML } = useApp();
+  const { user, wallets, theme, setTheme, updateProfile, addWallet, transferFunds, resetData, deleteWallet, showToast, confirm } = useApp();
 
   // Edit profile states
   const [name, setName] = useState(user.name);
@@ -14,15 +14,19 @@ export const ProfileTab: React.FC = () => {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   // EmailJS configuration states
+  /*
   const [serviceId, setServiceId] = useState(() => localStorage.getItem('ms_emailjs_service_id') || import.meta.env.VITE_EMAILJS_SERVICE_ID || '');
   const [templateId, setTemplateId] = useState(() => localStorage.getItem('ms_emailjs_template_id') || import.meta.env.VITE_EMAILJS_TEMPLATE_ID || '');
   const [publicKey, setPublicKey] = useState(() => localStorage.getItem('ms_emailjs_public_key') || import.meta.env.VITE_EMAILJS_PUBLIC_KEY || '');
   const [showEmailConfig, setShowEmailConfig] = useState(false);
+  */
 
   // Compaction preview states
+  /*
   const [previewSummary, setPreviewSummary] = useState<any>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  */
 
   // Transfer states
   const [showTransfer, setShowTransfer] = useState(false);
@@ -53,6 +57,7 @@ export const ProfileTab: React.FC = () => {
     showToast('Cập nhật hồ sơ thành công!', 'success');
   };
 
+  /*
   const handleSaveEmailConfig = (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('ms_emailjs_service_id', serviceId.trim());
@@ -73,6 +78,7 @@ export const ProfileTab: React.FC = () => {
     setIsPreviewOpen(true);
     showToast('Giả lập nén dữ liệu & phân tích AI thành công!', 'success');
   };
+  */
 
   const handleTransfer = (e: React.FormEvent) => {
     e.preventDefault();
@@ -422,7 +428,7 @@ export const ProfileTab: React.FC = () => {
         </div>
       </section>
 
-      {/* 3. Báo cáo & Tối ưu hóa dữ liệu (Compaction & AI Reports) */}
+      {/* 3. Báo cáo & Tối ưu hóa dữ liệu (Compaction & AI Reports)
       <section className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-3xl p-5 shadow-[0_4px_16px_rgba(0,0,0,0.02)] space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold font-vietnam text-zinc-800 dark:text-zinc-100 flex items-center gap-1.5">
@@ -443,7 +449,7 @@ export const ProfileTab: React.FC = () => {
           Money Saver tự động nén các giao dịch tháng cũ thành dòng báo cáo duy nhất khi bắt đầu tháng mới để tối ưu hóa bộ nhớ điện thoại của bạn nhẹ nhất. Bạn có thể nhấn nút chạy thử để xem báo cáo mẫu ngay lập tức.
         </p>
 
-        {/* Compressed monthly reports list */}
+        Compressed monthly reports list
         {monthlySummaries.length === 0 ? (
           <div className="text-center p-4 bg-zinc-50 dark:bg-zinc-950/40 rounded-2xl border border-zinc-100 dark:border-zinc-850 text-[10px] text-zinc-400 dark:text-zinc-550 font-vietnam">
             Chưa có báo cáo lưu trữ tháng cũ nào.
@@ -476,7 +482,7 @@ export const ProfileTab: React.FC = () => {
         )}
       </section>
 
-      {/* 4. Cấu hình EmailJS báo cáo (EmailJS Config) */}
+      4. Cấu hình EmailJS báo cáo (EmailJS Config)
       <section className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-3xl p-5 shadow-[0_4px_16px_rgba(0,0,0,0.02)] space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold font-vietnam text-zinc-800 dark:text-zinc-100 flex items-center gap-1.5">
@@ -543,7 +549,7 @@ export const ProfileTab: React.FC = () => {
             )}
           </div>
         )}
-      </section>
+      </section> */}
 
       {/* 5. System Settings (Cài đặt hệ thống) */}
       <section className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-3xl p-5 shadow-[0_4px_16px_rgba(0,0,0,0.02)] space-y-4">
@@ -563,8 +569,8 @@ export const ProfileTab: React.FC = () => {
             >
               <div
                 className={`w-4 h-4 rounded-full shadow-md transform transition-all duration-300 flex items-center justify-center ${theme === 'dark'
-                    ? 'translate-x-6 bg-indigo-500 text-white'
-                    : 'translate-x-0 bg-white text-amber-500'
+                  ? 'translate-x-6 bg-indigo-500 text-white'
+                  : 'translate-x-0 bg-white text-amber-500'
                   }`}
               ></div>
             </button>
@@ -630,12 +636,11 @@ export const ProfileTab: React.FC = () => {
       </section>
 
       {/* 6. Simulated Mail Envelope Dialog Preview Modal */}
-      {isPreviewOpen && previewSummary && (
+      {/* {isPreviewOpen && previewSummary && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-fade-in" onClick={() => setIsPreviewOpen(false)}></div>
           <div className="relative w-full max-w-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-[2.5rem] p-6 shadow-[0_12px_45px_rgba(0,0,0,0.18)] z-10 flex flex-col max-h-[85vh] overflow-hidden animate-scale-up">
-            
-            {/* Header */}
+
             <div className="flex items-center justify-between pb-3.5 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
               <div>
                 <h3 className="text-xs font-bold font-vietnam text-zinc-850 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
@@ -644,23 +649,21 @@ export const ProfileTab: React.FC = () => {
                 </h3>
                 <p className="text-[9px] font-vietnam text-zinc-400 dark:text-zinc-550 mt-0.5">Xem trước email gửi đến {user.email || 'chưa thiết lập email'}</p>
               </div>
-              <button 
-                onClick={() => setIsPreviewOpen(false)} 
+              <button
+                onClick={() => setIsPreviewOpen(false)}
                 className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-350 bg-zinc-50 dark:bg-zinc-800 rounded-xl transition-all cursor-pointer"
               >
                 <X size={14} />
               </button>
             </div>
 
-            {/* Simulated HTML Mail viewport container */}
             <div className="flex-1 overflow-y-auto my-4 border border-zinc-150 dark:border-zinc-800/80 rounded-2xl bg-zinc-50 dark:bg-zinc-950 overflow-hidden shadow-inner">
-              <div 
+              <div
                 className="w-full h-full p-2 overflow-y-auto"
-                dangerouslySetInnerHTML={{ __html: generateEmailHTML(previewSummary) }} 
+                dangerouslySetInnerHTML={{ __html: generateEmailHTML(previewSummary) }}
               />
             </div>
 
-            {/* Footer Buttons */}
             <div className="flex gap-2.5 shrink-0 pt-1">
               <button
                 onClick={() => {
@@ -678,7 +681,7 @@ export const ProfileTab: React.FC = () => {
               >
                 Tải Thư HTML (.html)
               </button>
-              
+
               <button
                 onClick={async () => {
                   if (!user.email) {
@@ -703,7 +706,7 @@ export const ProfileTab: React.FC = () => {
 
           </div>
         </div>
-      )}
+      )} */}
 
     </div>
   );
