@@ -59,7 +59,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 Chào mừng đến với Money Saver!
               </h2>
               <p className="text-sm font-vietnam text-zinc-500 dark:text-zinc-400 leading-relaxed px-4">
-                Trợ lý quản lý tài chính cá nhân tối giản, trực quan và hiện đại được thiết kế với màu Sage Green cao cấp lấy cảm hứng từ iPhone 17.
+                Trợ lý quản lý tài chính cá nhân tối giản, trực quan và hiện đại.
               </p>
             </div>
           </div>
