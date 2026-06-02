@@ -1,8 +1,52 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconRenderer } from './IconRenderer';
-import { Sun, Moon, Plus, ArrowLeftRight, Download, Upload, Trash2, Smartphone, Building2, Wallet as WalletIcon } from 'lucide-react';
+import { Sun, Moon, Plus, ArrowLeftRight, Download, Upload, Trash2, Smartphone, Building2, Wallet as WalletIcon, Camera, X } from 'lucide-react';
 import { formatThousand, parseThousand } from '../utils/format';
+
+const compressAvatar = (file: File, maxSize: number = 150): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        const size = Math.min(width, height);
+        canvas.width = maxSize;
+        canvas.height = maxSize;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const sourceX = (width - size) / 2;
+          const sourceY = (height - size) / 2;
+          
+          ctx.drawImage(
+            img,
+            sourceX,
+            sourceY,
+            size,
+            size,
+            0,
+            0,
+            maxSize,
+            maxSize
+          );
+          
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(compressedBase64);
+        } else {
+          reject(new Error('Không tạo được context 2D'));
+        }
+      };
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
 
 export const ProfileTab: React.FC = () => {
   const { user, wallets, theme, setTheme, updateProfile, addWallet, transferFunds, resetData, deleteWallet, showToast, confirm } = useApp();
@@ -12,6 +56,8 @@ export const ProfileTab: React.FC = () => {
   const [email, setEmail] = useState(user.email || '');
   const avatar = user.avatarUrl;
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // EmailJS configuration states
   /*
@@ -167,6 +213,32 @@ export const ProfileTab: React.FC = () => {
     }
   };
 
+  const handleAvatarClick = () => {
+    setShowAvatarModal(true);
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      showToast('Đang nén và tối ưu ảnh đại diện...', 'info');
+      const compressedBase64 = await compressAvatar(file, 150);
+      
+      // Update profile instantly
+      updateProfile(user.name, compressedBase64, user.email);
+      showToast('Cập nhật ảnh đại diện thành công!', 'success');
+      setShowAvatarModal(false);
+    } catch (err) {
+      console.error('Lỗi khi nén ảnh:', err);
+      showToast('Nén ảnh đại diện thất bại, vui lòng thử lại.', 'error');
+    }
+  };
+
   return (
     <div className="pb-24 px-4 pt-6 max-w-md mx-auto space-y-6">
 
@@ -177,7 +249,9 @@ export const ProfileTab: React.FC = () => {
         <img
           src={avatar}
           alt={user.name}
-          className="w-16 h-16 rounded-full border-2 border-[#8fae8d]/50 bg-[#8fae8d]/10 shrink-0"
+          className="w-16 h-16 rounded-full border-2 border-[#8fae8d]/50 bg-[#8fae8d]/10 shrink-0 cursor-pointer hover:opacity-85 active:scale-95 transition-all object-cover shadow-sm"
+          onClick={handleAvatarClick}
+          title="Bấm để thay đổi ảnh đại diện"
         />
 
         <div className="flex-1 min-w-0">
@@ -707,6 +781,77 @@ export const ProfileTab: React.FC = () => {
           </div>
         </div>
       )} */}
+
+      {/* 7. Modal Thay đổi ảnh đại diện */}
+      {showAvatarModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-300 animate-fade-in"
+            onClick={() => setShowAvatarModal(false)}
+          ></div>
+
+          {/* Modal Container */}
+          <div className="relative w-full max-w-xs bg-white/95 dark:bg-zinc-900/95 border border-zinc-100 dark:border-zinc-800 rounded-[2.5rem] p-6 shadow-2xl space-y-4 animate-scale-up z-10 text-center backdrop-blur-lg">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                Ảnh đại diện
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowAvatarModal(false)}
+                className="p-1 text-zinc-400 hover:text-zinc-650 rounded-lg cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Upload Button Area */}
+            <div className="py-4">
+              <button
+                type="button"
+                onClick={triggerFileInput}
+                className="w-20 h-20 bg-[#6f8d6d]/10 hover:bg-[#6f8d6d]/20 text-[#6f8d6d] dark:bg-[#6f8d6d]/20 dark:text-[#8fae8d] rounded-full flex items-center justify-center mx-auto transition-all cursor-pointer shadow-md hover:scale-105 active:scale-95 group relative overflow-hidden"
+              >
+                <Camera size={28} className="group-hover:scale-110 transition-transform" />
+                <div className="absolute inset-0 bg-gradient-to-br from-[#8fae8d]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              </button>
+            </div>
+
+            {/* Explanation text */}
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-extrabold font-vietnam text-zinc-800 dark:text-zinc-200">
+                Chọn ảnh từ thiết bị
+              </h4>
+              <p className="text-[10px] font-vietnam text-zinc-400 dark:text-zinc-500 leading-relaxed px-2">
+                Bấm vào biểu tượng camera phía trên để tải ảnh của bạn lên. Hệ thống sẽ tự động cắt khung vuông và nén ảnh xuống định dạng siêu nhẹ (~15KB) giúp tải ứng dụng nhanh hơn.
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAvatarModal(false)}
+                className="w-full py-2.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 hover:bg-zinc-100 dark:hover:bg-zinc-850 text-zinc-500 dark:text-zinc-400 text-xs font-bold font-vietnam rounded-xl transition-all cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+            </div>
+
+            {/* Hidden File Input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarFileChange}
+            />
+          </div>
+        </div>
+      )}
 
     </div>
   );
