@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconRenderer } from './IconRenderer';
-import { FolderHeart, Pencil, Check, AlertTriangle, Palette, PlusCircle, X } from 'lucide-react';
+import { FolderHeart, Pencil, AlertTriangle, PlusCircle, X } from 'lucide-react';
 import { formatThousand, parseThousand } from '../utils/format';
 import type { Category } from '../types';
 

@@ -66,16 +66,6 @@ const defaultUser: UserProfile = {
   avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Jack'
 };
 
-// Helper function to safely read from localStorage
-const getLocalStorageItem = <T,>(key: string, defaultValue: T): T => {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : defaultValue;
-  } catch (e) {
-    console.error(`Lỗi parse ${key} từ localStorage:`, e);
-    return defaultValue;
-  }
-};
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [loading, setLoading] = useState(true);
@@ -113,7 +103,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setThemeState(savedTheme);
 
         for (const item of keys) {
-          let val = await db.get(item.dbKey, null);
+          let val: any = await db.get<any>(item.dbKey, null);
           
           // Migrate from localStorage if first time and no IndexedDB data found
           if (val === null) {
