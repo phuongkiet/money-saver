@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconRenderer } from './IconRenderer';
-import { TrendingDown, TrendingUp, Wallet as WalletIcon, Trash2, Info } from 'lucide-react';
+import { TrendingDown, TrendingUp, Wallet as WalletIcon, Trash2, Pencil, Info } from 'lucide-react';
 
-export const DashboardTab: React.FC = () => {
+interface DashboardTabProps {
+  onEditTransaction: (id: string) => void;
+}
+
+export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction }) => {
   const { transactions, categories, wallets, deleteTransaction } = useApp();
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string | null>(null);
 
@@ -335,9 +339,9 @@ export const DashboardTab: React.FC = () => {
                             </div>
                           </div>
                           
-                          {/* Amount and Delete Action */}
-                          <div className="flex items-center gap-3 shrink-0 ml-3 text-right">
-                            <div>
+                          {/* Amount and Actions */}
+                          <div className="flex items-center gap-2 shrink-0 ml-3 text-right">
+                            <div className="mr-1">
                               <span className={`text-xs font-bold font-vietnam ${
                                 tx.type === 'income' 
                                   ? 'text-emerald-500 dark:text-emerald-400' 
@@ -347,6 +351,14 @@ export const DashboardTab: React.FC = () => {
                               </span>
                             </div>
                             
+                            <button
+                              onClick={() => onEditTransaction(tx.id)}
+                              className="p-1.5 text-zinc-350 dark:text-zinc-650 hover:text-[#6f8d6d] dark:hover:text-[#8fae8d] active:scale-90 transition-colors opacity-0 group-hover:opacity-100 max-sm:opacity-100"
+                              title="Sửa giao dịch"
+                            >
+                              <Pencil size={13} />
+                            </button>
+
                             <button
                               onClick={() => {
                                 if (window.confirm('Bạn có chắc chắn muốn xóa giao dịch này? Số dư ví sẽ được cập nhật lại.')) {

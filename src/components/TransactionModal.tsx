@@ -7,10 +7,11 @@ import { formatThousand, parseThousand } from '../utils/format';
 interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  editingTransactionId?: string | null;
 }
 
-export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onClose }) => {
-  const { categories, wallets, addTransaction, showToast } = useApp();
+export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onClose, editingTransactionId }) => {
+  const { categories, wallets, addTransaction, updateTransaction, transactions, showToast } = useApp();
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [amount, setAmount] = useState<string>('');
   const [categoryId, setCategoryId] = useState<string>('');
@@ -18,19 +19,38 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
   const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [note, setNote] = useState<string>('');
 
-  // Set default values when opening
+  // Set form values when opening or changing edit transaction
   React.useEffect(() => {
     if (isOpen) {
-      if (categories.length > 0 && !categoryId) {
+      if (editingTransactionId) {
+        const tx = transactions.find(t => t.id === editingTransactionId);
+        if (tx) {
+          setType(tx.type);
+          setAmount(formatThousand(tx.amount.toString()));
+          setCategoryId(tx.categoryId === 'income-default' ? '' : tx.categoryId);
+          setWalletId(tx.walletId);
+          setDate(tx.date);
+          setNote(tx.note);
+          return;
+        }
+      }
+
+      // Default values for new transaction
+      setAmount('');
+      setNote('');
+      setDate(new Date().toISOString().split('T')[0]);
+      setType('expense');
+      
+      if (categories.length > 0) {
         setCategoryId(categories[0].id);
       }
-      if (wallets.length > 0 && !walletId) {
+      if (wallets.length > 0) {
         // Set cash wallet or first wallet as default
         const cashWallet = wallets.find(w => w.type === 'cash') || wallets[0];
         setWalletId(cashWallet.id);
       }
     }
-  }, [isOpen, categories, wallets]);
+  }, [isOpen, editingTransactionId, categories, wallets, transactions]);
 
   if (!isOpen) return null;
 
@@ -56,13 +76,18 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
     // If type is income, use income-default category id
     const finalCategoryId = type === 'income' ? 'income-default' : categoryId;
 
-    addTransaction(parsedAmount, type, finalCategoryId, walletId, note, date);
+    if (editingTransactionId) {
+      updateTransaction(editingTransactionId, parsedAmount, type, finalCategoryId, walletId, note, date);
+      showToast('Cập nhật giao dịch thành công!', 'success');
+    } else {
+      addTransaction(parsedAmount, type, finalCategoryId, walletId, note, date);
+      showToast('Thêm giao dịch mới thành công!', 'success');
+    }
     
     // Reset form & Close
     setAmount('');
     setNote('');
     setDate(new Date().toISOString().split('T')[0]);
-    showToast('Thêm giao dịch mới thành công!', 'success');
     onClose();
   };
 
@@ -80,7 +105,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
         {/* Header */}
         <div className="flex items-center justify-between pb-1">
           <h3 className="text-base font-bold font-vietnam text-zinc-800 dark:text-zinc-100">
-            Thêm Giao Dịch Mới
+            {editingTransactionId ? 'Chỉnh Sửa Giao Dịch' : 'Thêm Giao Dịch Mới'}
           </h3>
           <button
             onClick={onClose}
@@ -248,7 +273,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
               type="submit"
               className="w-full py-4 bg-gradient-to-br from-[#8fae8d] to-[#6f8d6d] text-white text-xs font-bold font-vietnam rounded-2xl shadow-[0_4px_16px_rgba(143,174,141,0.3)] hover:scale-[1.01] hover:shadow-[0_6px_20px_rgba(143,174,141,0.4)] active:scale-95 transition-all focus:outline-none"
             >
-              Hoàn Thành Giao Dịch
+              {editingTransactionId ? 'Lưu Thay Đổi' : 'Hoàn Thành Giao Dịch'}
             </button>
           </div>
 

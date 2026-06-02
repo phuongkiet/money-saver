@@ -8,11 +8,13 @@ import { ProfileTab } from './components/ProfileTab';
 import { TransactionModal } from './components/TransactionModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { Onboarding } from './components/Onboarding';
+import { UpdatePromptModal } from './components/UpdatePromptModal';
 
 function AppContent() {
   const [isOnboarded, setIsOnboarded] = useState<boolean>(() => localStorage.getItem('ms_onboarded') === 'true');
   const [activeTab, setActiveTab] = useState<number>(0);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
 
   if (!isOnboarded) {
     return <Onboarding onComplete={() => setIsOnboarded(true)} />;
@@ -22,7 +24,14 @@ function AppContent() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 0:
-        return <DashboardTab />;
+        return (
+          <DashboardTab
+            onEditTransaction={(id) => {
+              setEditingTransactionId(id);
+              setIsModalOpen(true);
+            }}
+          />
+        );
       case 1:
         return <CategoriesTab />;
       case 2:
@@ -30,7 +39,14 @@ function AppContent() {
       case 3:
         return <ProfileTab />;
       default:
-        return <DashboardTab />;
+        return (
+          <DashboardTab
+            onEditTransaction={(id) => {
+              setEditingTransactionId(id);
+              setIsModalOpen(true);
+            }}
+          />
+        );
     }
   };
 
@@ -46,17 +62,27 @@ function AppContent() {
       <BottomNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onOpenModal={() => setIsModalOpen(true)}
+        onOpenModal={() => {
+          setEditingTransactionId(null);
+          setIsModalOpen(true);
+        }}
       />
 
       {/* New Transaction Bottom Sheet/Modal */}
       <TransactionModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingTransactionId(null);
+        }}
+        editingTransactionId={editingTransactionId}
       />
 
       {/* PWA Smart Installation Dialog Banner */}
       <PWAInstallBanner />
+
+      {/* Modern PWA Update Modal */}
+      <UpdatePromptModal />
 
     </div>
   );
