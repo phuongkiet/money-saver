@@ -66,6 +66,7 @@ const BudgetContent: React.FC = () => {
   const { categories, transactions, addCategory, updateCategory, showToast } = useApp();
 
   const [showAddForm, setShowAddForm] = useState(false);
+  const [categoryType, setCategoryType] = useState<'expense' | 'income'>('expense');
   const [newBudgetName, setNewBudgetName] = useState('');
   const [newBudgetAmount, setNewBudgetAmount] = useState('');
   const [newBudgetColor, setNewBudgetColor] = useState('#8fae8d');
@@ -111,6 +112,7 @@ const BudgetContent: React.FC = () => {
     setEditColor(cat.color);
     setEditIcon(cat.icon);
     setShowAddForm(false);
+    setCategoryType(cat.type || 'expense');
   };
 
   const handleCancelEdit = () => setEditingCatId(null);
@@ -118,23 +120,23 @@ const BudgetContent: React.FC = () => {
   const handleSaveEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCatId) return;
-    const amount = parseThousand(editAmount);
-    if (isNaN(amount) || amount < 0) { showToast('Vui lòng nhập định mức chi tiêu hợp lệ.', 'error'); return; }
+    const amount = categoryType === 'expense' ? parseThousand(editAmount) : 0;
+    if (categoryType === 'expense' && (isNaN(amount) || amount < 0)) { showToast('Vui lòng nhập định mức hợp lệ.', 'error'); return; }
     if (!editName.trim()) { showToast('Vui lòng điền tên danh mục.', 'error'); return; }
-    updateCategory(editingCatId, editName.trim(), editColor, editIcon, amount);
+    updateCategory(editingCatId, editName.trim(), editColor, editIcon, amount, categoryType);
     setEditingCatId(null);
     showToast('Cập nhật danh mục thành công!', 'success');
   };
 
   const handleAddBudgetSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = parseThousand(newBudgetAmount);
-    if (isNaN(amount) || amount < 0) { showToast('Vui lòng nhập định mức chi tiêu hợp lệ.', 'error'); return; }
-    if (!newBudgetName.trim()) { showToast('Vui lòng điền tên ngân sách.', 'error'); return; }
-    addCategory(newBudgetName.trim(), newBudgetColor, newBudgetIcon, amount);
+    const amount = categoryType === 'expense' ? parseThousand(newBudgetAmount) : 0;
+    if (categoryType === 'expense' && (isNaN(amount) || amount < 0)) { showToast('Vui lòng nhập định mức hợp lệ.', 'error'); return; }
+    if (!newBudgetName.trim()) { showToast('Vui lòng điền tên danh mục.', 'error'); return; }
+    addCategory(newBudgetName.trim(), newBudgetColor, newBudgetIcon, amount, categoryType);
     setNewBudgetName(''); setNewBudgetAmount(''); setNewBudgetColor('#8fae8d'); setNewBudgetIcon('ShoppingBag');
     setShowAddForm(false);
-    showToast('Thêm ngân sách mới thành công!', 'success');
+    showToast(categoryType === 'expense' ? 'Thêm danh mục chi tiêu thành công!' : 'Thêm danh mục thu nhập thành công!', 'success');
   };
 
   return (
@@ -142,40 +144,70 @@ const BudgetContent: React.FC = () => {
       <div>
         <h2 className="text-xl font-bold font-vietnam text-zinc-800 dark:text-zinc-100 flex items-center gap-2">
           <FolderHeart className="text-[#6f8d6d]" />
-          Hạn Mức Ngân Sách
+          Danh Mục Quản Lý
         </h2>
         <p className="text-xs text-zinc-400 dark:text-zinc-500 font-vietnam mt-1 leading-relaxed">
-          Thiết lập ngân sách hàng tháng cho từng danh mục để kiểm soát tài chính.
+          Quản lý các khoản chi tiêu và nguồn thu nhập của bạn.
         </p>
       </div>
+
+      {/* Expense/Income Toggle */}
+      {!editingCatId && (
+        <div className="bg-zinc-100 dark:bg-zinc-950 p-1.5 rounded-2xl flex gap-1.5 mt-2">
+          <button
+            onClick={() => setCategoryType('expense')}
+            className={`flex-1 py-2.5 text-xs font-bold font-vietnam rounded-xl transition-all ${
+              categoryType === 'expense'
+                ? 'bg-white dark:bg-zinc-800 text-rose-500 shadow-sm'
+                : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-600'
+            }`}
+          >
+            Chi tiêu (-)
+          </button>
+          <button
+            onClick={() => setCategoryType('income')}
+            className={`flex-1 py-2.5 text-xs font-bold font-vietnam rounded-xl transition-all ${
+              categoryType === 'income'
+                ? 'bg-white dark:bg-zinc-800 text-emerald-500 shadow-sm'
+                : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-600'
+            }`}
+          >
+            Thu nhập (+)
+          </button>
+        </div>
+      )}
 
       {!editingCatId && (
         <button
           onClick={() => setShowAddForm(!showAddForm)}
-          className="w-full py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold font-vietnam text-[#6f8d6d] dark:text-[#8fae8d] hover:bg-zinc-100/50 dark:hover:bg-zinc-800/40 transition-all shadow-[0_4px_12px_rgba(0,0,0,0.01)] cursor-pointer"
+          className={`w-full py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold font-vietnam transition-all shadow-[0_4px_12px_rgba(0,0,0,0.01)] cursor-pointer ${
+            categoryType === 'expense' ? 'text-[#6f8d6d] dark:text-[#8fae8d] hover:bg-zinc-100/50' : 'text-emerald-500 dark:text-emerald-400 hover:bg-zinc-100/50'
+          }`}
         >
           <PlusCircle size={16} />
-          {showAddForm ? 'Đóng form ngân sách' : 'Thêm ngân sách mới'}
+          {showAddForm ? 'Đóng form tạo mới' : categoryType === 'expense' ? 'Thêm danh mục chi tiêu' : 'Thêm danh mục thu nhập'}
         </button>
       )}
 
       {showAddForm && !editingCatId && (
         <form onSubmit={handleAddBudgetSubmit} className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-100 dark:border-zinc-800 shadow-md space-y-4 animate-slide-down">
-          <h3 className="text-xs font-bold font-vietnam text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">Tạo ngân sách định mức mới</h3>
+          <h3 className="text-xs font-bold font-vietnam text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">{categoryType === 'expense' ? 'Tạo danh mục chi tiêu mới' : 'Tạo danh mục thu nhập mới'}</h3>
           <div className="space-y-3.5">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Tên ngân sách</label>
-              <input type="text" required value={newBudgetName} onChange={(e) => setNewBudgetName(e.target.value)} placeholder="Ví dụ: Mua sắm quần áo, Du lịch hè..."
+              <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">{categoryType === 'expense' ? 'Tên danh mục chi tiêu' : 'Tên danh mục thu nhập'}</label>
+              <input type="text" required value={newBudgetName} onChange={(e) => setNewBudgetName(e.target.value)} placeholder={categoryType === 'expense' ? 'Ví dụ: Mua sắm quần áo...' : 'Ví dụ: Lương, Thưởng...'}
                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-medium font-vietnam focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200" />
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Hạn mức hàng tháng (VNĐ)</label>
-              <div className="relative">
-                <input type="text" inputMode="decimal" required value={newBudgetAmount} onChange={(e) => setNewBudgetAmount(formatThousand(e.target.value))} placeholder="0 (không hạn mức)"
-                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-bold font-vietnam focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200" />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-450 font-vietnam">đ</span>
+            {categoryType === 'expense' && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Hạn mức hàng tháng (VNĐ)</label>
+                <div className="relative">
+                  <input type="text" inputMode="decimal" required value={newBudgetAmount} onChange={(e) => setNewBudgetAmount(formatThousand(e.target.value))} placeholder="0 (không hạn mức)"
+                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-bold font-vietnam focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-450 font-vietnam">đ</span>
+                </div>
               </div>
-            </div>
+            )}
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase block">Chọn màu chủ đạo</label>
               <div className="flex flex-wrap gap-2.5 bg-zinc-50 dark:bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-850 max-h-24 overflow-y-auto">
@@ -198,15 +230,17 @@ const BudgetContent: React.FC = () => {
                 ))}
               </div>
             </div>
-            <button type="submit" className="w-full py-3 bg-[#6f8d6d] hover:bg-[#5b755a] text-white text-xs font-bold font-vietnam rounded-xl shadow-md active:scale-95 transition-all mt-2 cursor-pointer">
-              Tạo Ngân Sách Định Mức
+            <button type="submit" className={`w-full py-3 text-white text-xs font-bold font-vietnam rounded-xl shadow-md active:scale-95 transition-all mt-2 cursor-pointer ${
+              categoryType === 'expense' ? 'bg-[#6f8d6d] hover:bg-[#5b755a]' : 'bg-emerald-500 hover:bg-emerald-600'
+            }`}>
+              {categoryType === 'expense' ? 'Tạo Danh Mục Chi Tiêu' : 'Tạo Danh Mục Thu Nhập'}
             </button>
           </div>
         </form>
       )}
 
       <div className="space-y-4">
-        {categories.map(cat => {
+        {categories.filter(c => (c.type || 'expense') === categoryType).map(cat => {
           const spent = getSpentAmount(cat.id);
           const hasBudget = cat.budget > 0;
           const percentage = hasBudget ? Math.min((spent / cat.budget) * 100, 100) : 0;
@@ -227,14 +261,16 @@ const BudgetContent: React.FC = () => {
                     <input type="text" required value={editName} onChange={(e) => setEditName(e.target.value)}
                       className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-semibold font-vietnam focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200" />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Hạn mức tháng (VNĐ)</label>
-                    <div className="relative">
-                      <input type="text" inputMode="decimal" required value={editAmount} onChange={(e) => setEditAmount(formatThousand(e.target.value))}
-                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-bold font-vietnam focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200" />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-450 font-vietnam">đ</span>
+                  {categoryType === 'expense' && (
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Hạn mức tháng (VNĐ)</label>
+                      <div className="relative">
+                        <input type="text" inputMode="decimal" required value={editAmount} onChange={(e) => setEditAmount(formatThousand(e.target.value))}
+                          className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-bold font-vietnam focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200" />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-450 font-vietnam">đ</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase block">Màu chủ đạo</label>
                     <div className="flex flex-wrap gap-2 bg-zinc-50 dark:bg-zinc-950/40 p-2 rounded-xl border border-zinc-100 dark:border-zinc-850 max-h-20 overflow-y-auto">
@@ -282,7 +318,11 @@ const BudgetContent: React.FC = () => {
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-sm font-bold font-vietnam text-zinc-800 dark:text-zinc-200 truncate">{cat.name}</h3>
-                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-vietnam font-semibold uppercase mt-0.5">Đã dùng: {formatVND(spent)}</p>
+                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-vietnam font-semibold uppercase mt-0.5">
+                      {categoryType === 'expense' ? `Đã dùng: ${formatVND(spent)}` : `Tổng thu: ${formatVND(
+                        transactions.filter(t => t.type === 'income' && t.categoryId === cat.id).reduce((s, t) => s + t.amount, 0)
+                      )}`}
+                    </p>
                   </div>
                 </div>
                 <button onClick={() => handleStartEdit(cat)}
@@ -290,11 +330,13 @@ const BudgetContent: React.FC = () => {
                   <Pencil size={14} />
                 </button>
               </div>
-              <div className="bg-zinc-50 dark:bg-zinc-950/40 p-3.5 rounded-2xl border border-zinc-100/50 dark:border-zinc-800/50 flex items-center justify-between">
-                <span className="text-xs font-semibold font-vietnam text-zinc-400 dark:text-zinc-500">Hạn mức hàng tháng</span>
-                <span className="text-xs font-bold font-vietnam text-zinc-800 dark:text-zinc-100">{hasBudget ? formatVND(cat.budget) : 'Chưa thiết lập'}</span>
-              </div>
-              {hasBudget && (
+              {categoryType === 'expense' && (
+                <div className="bg-zinc-50 dark:bg-zinc-950/40 p-3.5 rounded-2xl border border-zinc-100/50 dark:border-zinc-800/50 flex items-center justify-between">
+                  <span className="text-xs font-semibold font-vietnam text-zinc-400 dark:text-zinc-500">Hạn mức hàng tháng</span>
+                  <span className="text-xs font-bold font-vietnam text-zinc-800 dark:text-zinc-100">{hasBudget ? formatVND(cat.budget) : 'Chưa thiết lập'}</span>
+                </div>
+              )}
+              {categoryType === 'expense' && hasBudget && (
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-[10px] font-semibold font-vietnam">
                     <span className={`${isOverBudget ? 'text-rose-500' : 'text-zinc-400 dark:text-zinc-500'}`}>Tiến trình: {percentage.toFixed(0)}%</span>

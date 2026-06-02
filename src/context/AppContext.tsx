@@ -40,8 +40,8 @@ interface AppContextType {
   transferFunds: (fromId: string, toId: string, amount: number) => boolean;
   deleteWallet: (id: string) => void;
   // Categories
-  addCategory: (name: string, color: string, icon: string, budget: number) => void;
-  updateCategory: (id: string, name: string, color: string, icon: string, budget: number) => void;
+  addCategory: (name: string, color: string, icon: string, budget: number, type: TransactionType) => void;
+  updateCategory: (id: string, name: string, color: string, icon: string, budget: number, type: TransactionType) => void;
   updateCategoryBudget: (id: string, budget: number) => void;
   updateCategoryColor: (id: string, color: string) => void;
   // Debts
@@ -69,11 +69,15 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const defaultCategories: Category[] = [
-  { id: 'cat-1', name: 'Ăn uống', icon: 'Utensils', color: '#8fae8d', budget: 0 },
-  { id: 'cat-2', name: 'Đi lại', icon: 'Car', color: '#57c5f7', budget: 0 },
-  { id: 'cat-3', name: 'Thuốc men', icon: 'HeartPulse', color: '#f36e6e', budget: 0 },
-  { id: 'cat-4', name: 'Học phí', icon: 'GraduationCap', color: '#9d7bf5', budget: 0 },
-  { id: 'cat-5', name: 'Giải trí', icon: 'Gamepad2', color: '#f78ce6', budget: 0 }
+  { id: 'cat-1', name: 'Ăn uống', icon: 'Utensils', color: '#8fae8d', budget: 0, type: 'expense' },
+  { id: 'cat-2', name: 'Đi lại', icon: 'Car', color: '#57c5f7', budget: 0, type: 'expense' },
+  { id: 'cat-3', name: 'Thuốc men', icon: 'HeartPulse', color: '#f36e6e', budget: 0, type: 'expense' },
+  { id: 'cat-4', name: 'Học phí', icon: 'GraduationCap', color: '#9d7bf5', budget: 0, type: 'expense' },
+  { id: 'cat-5', name: 'Giải trí', icon: 'Gamepad2', color: '#f78ce6', budget: 0, type: 'expense' },
+  { id: 'cat-inc-1', name: 'Tiền lương', icon: 'Briefcase', color: '#34d399', budget: 0, type: 'income' },
+  { id: 'cat-inc-2', name: 'Thưởng', icon: 'Gift', color: '#fbbf24', budget: 0, type: 'income' },
+  { id: 'cat-inc-3', name: 'Đầu tư', icon: 'TrendingUp', color: '#38bdf8', budget: 0, type: 'income' },
+  { id: 'cat-inc-4', name: 'Thu nhập khác', icon: 'PiggyBank', color: '#a78bfa', budget: 0, type: 'income' }
 ];
 
 const defaultWallets: Wallet[] = [
@@ -583,19 +587,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // ─── Categories ───────────────────────────────────────────────────────────
-  const addCategory = (name: string, color: string, icon: string, budget: number) => {
+  const addCategory = (name: string, color: string, icon: string, budget: number, type: TransactionType) => {
     if (!name.trim()) { showToast('Tên danh mục không được để trống.', 'error'); return; }
     if (budget < 0) { showToast('Ngân sách không được âm.', 'error'); return; }
-    const newCat: Category = { id: `cat-${Date.now()}`, name: name.trim(), color, icon, budget };
+    const newCat: Category = { id: `cat-${Date.now()}`, name: name.trim(), color, icon, budget, type };
     setCategories(prev => [...prev, newCat]);
   };
 
-  const updateCategory = (id: string, name: string, color: string, icon: string, budget: number) => {
+  const updateCategory = (id: string, name: string, color: string, icon: string, budget: number, type: TransactionType) => {
     const cat = categories.find(c => c.id === id);
     if (!cat) { showToast('Danh mục không tồn tại.', 'error'); return; }
     if (!name.trim()) { showToast('Tên danh mục không được để trống.', 'error'); return; }
     if (budget < 0) { showToast('Ngân sách không được âm.', 'error'); return; }
-    setCategories(prev => prev.map(c => c.id === id ? { ...c, name: name.trim(), color, icon, budget } : c));
+    setCategories(prev => prev.map(c => c.id === id ? { ...c, name: name.trim(), color, icon, budget, type } : c));
   };
 
   const updateCategoryBudget = (id: string, budget: number) => {

@@ -27,7 +27,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
         if (tx) {
           setType(tx.type);
           setAmount(formatThousand(tx.amount.toString()));
-          setCategoryId(tx.categoryId === 'income-default' ? '' : tx.categoryId);
+          setCategoryId(tx.categoryId === 'income-default' ? (categories.find(c => c.type === 'income')?.id || '') : tx.categoryId);
           setWalletId(tx.walletId);
           setDate(tx.date);
           setNote(tx.note);
@@ -41,8 +41,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       setDate(new Date().toISOString().split('T')[0]);
       setType('expense');
       
-      if (categories.length > 0) {
-        setCategoryId(categories[0].id);
+      const defaultFiltered = categories.filter(c => c.type === 'expense' || !c.type);
+      if (defaultFiltered.length > 0) {
+        setCategoryId(defaultFiltered[0].id);
       }
       if (wallets.length > 0) {
         // Set cash wallet or first wallet as default
@@ -63,8 +64,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       return;
     }
 
-    if (!categoryId && type === 'expense') {
-      showToast('Vui lòng chọn danh mục chi tiêu.', 'error');
+    if (!categoryId) {
+      showToast(type === 'expense' ? 'Vui lòng chọn danh mục chi tiêu.' : 'Vui lòng chọn danh mục thu nhập.', 'error');
       return;
     }
 
@@ -73,14 +74,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       return;
     }
 
-    // If type is income, use income-default category id
-    const finalCategoryId = type === 'income' ? 'income-default' : categoryId;
-
     if (editingTransactionId) {
-      updateTransaction(editingTransactionId, parsedAmount, type, finalCategoryId, walletId, note, date);
+      updateTransaction(editingTransactionId, parsedAmount, type, categoryId, walletId, note, date);
       showToast('Cập nhật giao dịch thành công!', 'success');
     } else {
-      addTransaction(parsedAmount, type, finalCategoryId, walletId, note, date);
+      addTransaction(parsedAmount, type, categoryId, walletId, note, date);
       showToast('Thêm giao dịch mới thành công!', 'success');
     }
     
@@ -125,8 +123,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
               type="button"
               onClick={() => {
                 setType('expense');
-                // Select first category
-                if (categories.length > 0) setCategoryId(categories[0].id);
+                const expCats = categories.filter(c => c.type === 'expense' || !c.type);
+                if (expCats.length > 0) setCategoryId(expCats[0].id);
               }}
               className={`flex-1 py-2 text-xs font-bold font-vietnam rounded-xl transition-all ${
                 type === 'expense'
@@ -138,7 +136,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
             </button>
             <button
               type="button"
-              onClick={() => setType('income')}
+              onClick={() => {
+                setType('income');
+                const incCats = categories.filter(c => c.type === 'income');
+                if (incCats.length > 0) setCategoryId(incCats[0].id);
+              }}
               className={`flex-1 py-2 text-xs font-bold font-vietnam rounded-xl transition-all ${
                 type === 'income'
                   ? 'bg-white dark:bg-zinc-800 text-emerald-500 shadow-sm'
@@ -203,39 +205,37 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
             </div>
           </div>
 
-          {/* Category Selection (Only show for expense) */}
-          {type === 'expense' && (
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block flex items-center gap-1">
-                <FolderHeart size={12} />
-                Chọn danh mục chi tiêu
-              </label>
-              <div className="grid grid-cols-5 gap-1.5">
-                {categories.map(cat => (
-                  <button
-                    type="button"
-                    key={cat.id}
-                    onClick={() => setCategoryId(cat.id)}
-                    className={`p-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all text-center ${
-                      categoryId === cat.id
-                        ? 'bg-[#8fae8d]/5 border-[#8fae8d] ring-1 ring-[#8fae8d]'
-                        : 'border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/40'
-                    }`}
+          {/* Category Selection */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block flex items-center gap-1">
+              <FolderHeart size={12} />
+              {type === 'expense' ? 'Chọn danh mục chi tiêu' : 'Chọn danh mục thu nhập'}
+            </label>
+            <div className="grid grid-cols-5 gap-1.5">
+              {categories.filter(c => c.type === type || (!c.type && type === 'expense')).map(cat => (
+                <button
+                  type="button"
+                  key={cat.id}
+                  onClick={() => setCategoryId(cat.id)}
+                  className={`p-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all text-center ${
+                    categoryId === cat.id
+                      ? 'bg-[#8fae8d]/5 border-[#8fae8d] ring-1 ring-[#8fae8d]'
+                      : 'border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/40'
+                  }`}
+                >
+                  <span
+                    className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs"
+                    style={{ backgroundColor: `${cat.color}15`, color: cat.color }}
                   >
-                    <span
-                      className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs"
-                      style={{ backgroundColor: `${cat.color}15`, color: cat.color }}
-                    >
-                      <IconRenderer name={cat.icon} size={15} />
-                    </span>
-                    <span className="text-[9px] font-bold font-vietnam text-zinc-600 dark:text-zinc-300 truncate w-full">
-                      {cat.name}
-                    </span>
-                  </button>
-                ))}
-              </div>
+                    <IconRenderer name={cat.icon} size={15} />
+                  </span>
+                  <span className="text-[9px] font-bold font-vietnam text-zinc-600 dark:text-zinc-300 truncate w-full">
+                    {cat.name}
+                  </span>
+                </button>
+              ))}
             </div>
-          )}
+          </div>
 
           {/* Date Picker & Notes */}
           <div className="grid grid-cols-2 gap-3.5">

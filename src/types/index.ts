@@ -17,6 +17,7 @@ export interface Category {
   icon: string; // name of Lucide icon
   color: string; // Hex color code
   budget: number; // monthly limit (0 means no limit)
+  type: TransactionType; // 'income' or 'expense'
 }
 
 export type WalletType = 'cash' | 'online';
