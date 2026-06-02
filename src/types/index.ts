@@ -1,6 +1,12 @@
+export interface Syncable {
+  updatedAt?: number;
+  isDeleted?: boolean;
+  pendingSync?: boolean;
+}
+
 export type TransactionType = 'income' | 'expense';
 
-export interface Transaction {
+export interface Transaction extends Syncable {
   id: string;
   amount: number;
   type: TransactionType;
@@ -11,7 +17,7 @@ export interface Transaction {
   recurringId?: string; // link về recurring transaction gốc
 }
 
-export interface Category {
+export interface Category extends Syncable {
   id: string;
   name: string;
   icon: string; // name of Lucide icon
@@ -22,7 +28,7 @@ export interface Category {
 
 export type WalletType = 'cash' | 'online';
 
-export interface Wallet {
+export interface Wallet extends Syncable {
   id: string;
   name: string;
   type: WalletType;
@@ -33,7 +39,7 @@ export interface Wallet {
 export type DebtType = 'to_pay' | 'to_collect'; // nợ phải trả | nợ thu hồi (cho vay)
 export type RepaymentMethod = 'emi' | 'reducing_balance'; // trả đều EMI | dư nợ giảm dần
 
-export interface Debt {
+export interface Debt extends Syncable {
   id: string;
   name: string;
   amount: number; // Số tiền gốc
@@ -50,7 +56,7 @@ export interface Debt {
 export type RecurringFrequency = 'daily' | 'weekly' | 'monthly';
 export type RecurringStatus = 'active' | 'paused' | 'completed';
 
-export interface RecurringTransaction {
+export interface RecurringTransaction extends Syncable {
   id: string;
   amount: number;
   type: TransactionType;
@@ -67,7 +73,7 @@ export interface RecurringTransaction {
 }
 
 // --- Savings Goals ---
-export interface SavingsGoal {
+export interface SavingsGoal extends Syncable {
   id: string;
   name: string;
   icon: string;
@@ -85,7 +91,7 @@ export interface UserProfile {
   email?: string;
 }
 
-export interface MonthlySummary {
+export interface MonthlySummary extends Syncable {
   monthId: string; // e.g. "2026-05"
   totalIncome: number;
   totalExpense: number;
@@ -99,7 +105,7 @@ export interface MonthlySummary {
   aiComment: string;
 }
 
-export interface YearlySummary {
+export interface YearlySummary extends Syncable {
   yearId: string; // e.g. "2026"
   totalIncome: number;
   totalExpense: number;

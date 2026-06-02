@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconRenderer } from './IconRenderer';
-import { Sun, Moon, Plus, ArrowLeftRight, Download, Upload, Trash2, Smartphone, Building2, Wallet as WalletIcon, Camera, X, FileSpreadsheet, FileText } from 'lucide-react';
+import { SyncStatus } from './SyncStatus';
+import { Sun, Moon, Plus, ArrowLeftRight, Download, Upload, Trash2, Smartphone, Building2, Wallet as WalletIcon, Camera, X, FileSpreadsheet, FileText, Cloud, RefreshCw, LogOut } from 'lucide-react';
 import { formatThousand, parseThousand } from '../utils/format';
 import * as XLSX from 'xlsx';
 import { CustomSelect } from './CustomSelect';
@@ -50,8 +51,17 @@ const compressAvatar = (file: File, maxSize: number = 150): Promise<string> => {
   });
 };
 
-export const ProfileTab: React.FC = () => {
-  const { user, wallets, transactions, categories, debts, savingsGoals, recurringTransactions, theme, setTheme, updateProfile, addWallet, transferFunds, resetData, deleteWallet, showToast, confirm } = useApp();
+interface ProfileTabProps {
+  onOpenAuth: () => void;
+}
+
+export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
+  const {
+    user, wallets, transactions, categories, debts, savingsGoals,
+    recurringTransactions, theme, setTheme, updateProfile, addWallet,
+    transferFunds, resetData, deleteWallet, showToast, confirm,
+    session, isSyncing, lastSyncedAt, syncData, logout
+  } = useApp();
 
   // Export states
   const [showExportSection, setShowExportSection] = useState(false);
@@ -466,6 +476,63 @@ export const ProfileTab: React.FC = () => {
             </div>
           )}
         </div>
+      </section>
+
+      {/* Cloud Synchronization Section */}
+      <section className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-3xl p-5 shadow-[0_4px_16px_rgba(0,0,0,0.02)] space-y-4">
+        <h3 className="text-sm font-bold font-vietnam text-zinc-800 dark:text-zinc-100 flex items-center gap-2">
+          <Cloud size={18} className="text-[#6f8d6d] dark:text-[#8fae8d]" />
+          Đồng bộ hóa Đám mây
+        </h3>
+        
+        {!session ? (
+          <div className="space-y-3.5">
+            <p className="text-xs font-semibold font-vietnam text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              Đăng nhập tài khoản để tự động đồng bộ hóa các khoản chi tiêu và ví tiền của bạn với bạn đời tức thời, giúp bảo lưu dữ liệu trọn đời hoàn toàn miễn phí.
+            </p>
+            <button
+              onClick={onOpenAuth}
+              className="w-full py-3 bg-gradient-to-r from-[#8fae8d] to-[#6f8d6d] hover:brightness-105 active:scale-[0.99] text-white font-bold rounded-2xl text-xs transition-all duration-200 cursor-pointer font-vietnam flex items-center justify-center gap-2 shadow-md shadow-[#6f8d6d]/10"
+            >
+              Đăng nhập hoặc Đăng ký
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-zinc-50 dark:bg-zinc-950 p-3 rounded-2xl border border-zinc-150 dark:border-zinc-850/60 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 font-vietnam uppercase">Tài khoản đám mây</span>
+                <SyncStatus onOpenAuth={onOpenAuth} />
+              </div>
+              <p className="text-xs font-bold font-vietnam text-zinc-700 dark:text-zinc-350 truncate">
+                {session.user.email}
+              </p>
+              {lastSyncedAt && (
+                <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 font-vietnam mt-0.5 block">
+                  Đồng bộ cuối: {new Date(lastSyncedAt).toLocaleString()}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => syncData()}
+                disabled={isSyncing}
+                className="py-3 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-zinc-150 dark:border-zinc-850 text-zinc-700 dark:text-zinc-300 font-bold rounded-2xl text-xs transition-all duration-250 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw size={13} className={`shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
+                Đồng bộ ngay
+              </button>
+              <button
+                onClick={logout}
+                className="py-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-950/30 border border-rose-150 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 font-bold rounded-2xl text-xs transition-all duration-250 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <LogOut size={13} className="shrink-0" />
+                Đăng xuất
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* 2. Wallets Manager (Quản lý ví) */}

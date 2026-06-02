@@ -8,6 +8,10 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+supabase_pass.txt
+.env
+.env.example
+supabase_schema.sql
 dist
 dist-ssr
 *.local

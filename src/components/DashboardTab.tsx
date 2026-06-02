@@ -1,14 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconRenderer } from './IconRenderer';
+import { SyncStatus } from './SyncStatus';
 import { TrendingDown, TrendingUp, Wallet as WalletIcon, Trash2, Pencil, Info, CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 interface DashboardTabProps {
   onEditTransaction: (id: string) => void;
+  onOpenAuth: () => void;
 }
 
-export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction }) => {
-  const { transactions, categories, wallets, deleteTransaction } = useApp();
+export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction, onOpenAuth }) => {
+  const { transactions, categories, wallets, deleteTransaction, user } = useApp();
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string | null>(null);
 
   // Helper: Format currency in VNĐ
@@ -122,11 +124,25 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction })
       {/* Upper header */}
       <div className="bg-gradient-to-b from-[#8fae8d]/30 to-transparent pt-6 pb-4 px-4 rounded-b-[2rem]">
         <div className="max-w-md mx-auto">
-          {/* Welcome Info */}
-          <div className="text-zinc-500 dark:text-zinc-400 text-xs font-vietnam uppercase tracking-wider font-semibold">
+          {/* Welcome Info & Sync pill */}
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2.5">
+              <img
+                src={user.avatarUrl || 'https://api.dicebear.com/7.x/adventurer/svg?seed=Jack'}
+                alt="Avatar"
+                className="w-8 h-8 rounded-xl object-cover bg-zinc-100 border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm"
+              />
+              <span className="text-sm font-bold font-vietnam text-zinc-800 dark:text-zinc-100">
+                Chào {user.name}!
+              </span>
+            </div>
+            <SyncStatus onOpenAuth={onOpenAuth} />
+          </div>
+
+          <div className="text-zinc-500 dark:text-zinc-400 text-[10px] font-vietnam uppercase tracking-wider font-bold">
             Tổng tài sản tích lũy
           </div>
-          <div className="text-3xl font-bold font-vietnam mt-1 text-zinc-800 dark:text-zinc-100 flex items-baseline gap-1">
+          <div className="text-3xl font-extrabold font-vietnam mt-1 text-zinc-800 dark:text-zinc-100 flex items-baseline gap-1">
             {formatVND(totalBalance)}
           </div>
 

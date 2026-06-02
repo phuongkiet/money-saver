@@ -9,12 +9,14 @@ import { TransactionModal } from './components/TransactionModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { Onboarding } from './components/Onboarding';
 import { UpdatePromptModal } from './components/UpdatePromptModal';
+import { AuthModal } from './components/AuthModal';
 
 function AppContent() {
   const [isOnboarded, setIsOnboarded] = useState<boolean>(() => localStorage.getItem('ms_onboarded') === 'true');
   const [activeTab, setActiveTab] = useState<number>(0);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
 
   if (!isOnboarded) {
     return <Onboarding onComplete={() => setIsOnboarded(true)} />;
@@ -29,6 +31,7 @@ function AppContent() {
               setEditingTransactionId(id);
               setIsModalOpen(true);
             }}
+            onOpenAuth={() => setIsAuthModalOpen(true)}
           />
         );
       case 1:
@@ -36,7 +39,7 @@ function AppContent() {
       case 2:
         return <DebtTab />;
       case 3:
-        return <ProfileTab />;
+        return <ProfileTab onOpenAuth={() => setIsAuthModalOpen(true)} />;
       default:
         return (
           <DashboardTab
@@ -44,6 +47,7 @@ function AppContent() {
               setEditingTransactionId(id);
               setIsModalOpen(true);
             }}
+            onOpenAuth={() => setIsAuthModalOpen(true)}
           />
         );
     }
@@ -75,6 +79,7 @@ function AppContent() {
 
       <PWAInstallBanner />
       <UpdatePromptModal />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
   );
 }

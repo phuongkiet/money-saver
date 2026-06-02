@@ -6,6 +6,18 @@ import type {
 } from '../types';
 import { CheckCircle2, AlertCircle, Info, X, Wallet as WalletIcon, Loader2 } from 'lucide-react';
 import { db } from '../utils/db';
+import { supabase } from '../utils/supabaseClient';
+import type { Session } from '@supabase/supabase-js';
+import {
+  mapTransactionToDb, mapTransactionFromDb,
+  mapCategoryToDb, mapCategoryFromDb,
+  mapWalletToDb, mapWalletFromDb,
+  mapDebtToDb, mapDebtFromDb,
+  mapRecurringToDb, mapRecurringFromDb,
+  mapSavingsGoalToDb, mapSavingsGoalFromDb,
+  mapMonthlySummaryToDb, mapMonthlySummaryFromDb,
+  mapYearlySummaryToDb, mapYearlySummaryFromDb
+} from '../utils/syncHelper';
 
 export interface Toast {
   id: string;
@@ -30,6 +42,16 @@ interface AppContextType {
   generateEmailHTML: (summary: MonthlySummary) => string;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   confirm: (title: string, message: string) => Promise<boolean>;
+  // Auth & Sync
+  session: Session | null;
+  authLoading: boolean;
+  isSyncing: boolean;
+  lastSyncedAt: number | null;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: () => Promise<void>;
+  register: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  syncData: () => Promise<boolean>;
   // Transactions
   addTransaction: (amount: number, type: TransactionType, categoryId: string, walletId: string, note: string, date: string) => void;
   updateTransaction: (id: string, amount: number, type: TransactionType, categoryId: string, walletId: string, note: string, date: string) => void;
@@ -125,6 +147,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [monthlySummaries, setMonthlySummaries] = useState<MonthlySummary[]>([]);
   const [yearlySummaries, setYearlySummaries] = useState<YearlySummary[]>([]);
 
+  // Auth & Sync States
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [deletedRecords, setDeletedRecords] = useState<{ id: string; table: string; updatedAt: number }[]>([]);
+
   // Toast & Confirm state
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [confirmState, setConfirmState] = useState<{
@@ -160,6 +189,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           { dbKey: 'ms_yearly_summaries', defaultVal: [], setter: setYearlySummaries },
           { dbKey: 'ms_recurring', defaultVal: defaultRecurring, setter: setRecurringTransactions },
           { dbKey: 'ms_savings_goals', defaultVal: defaultSavingsGoals, setter: setSavingsGoals },
+          { dbKey: 'ms_deleted_records', defaultVal: [], setter: setDeletedRecords }
         ];
 
         // Theme loading
@@ -170,6 +200,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           await db.set('ms_theme', savedTheme);
         }
         setThemeState(savedTheme);
+
+        let savedLastSynced = await db.get<number | null>('ms_last_synced_at', null);
+        setLastSyncedAt(savedLastSynced);
 
         for (const item of keys) {
           let val: any = await db.get<any>(item.dbKey, null);
@@ -194,7 +227,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const ourKeys = [
           'ms_transactions', 'ms_categories', 'ms_wallets', 'ms_debts',
           'ms_user', 'ms_theme', 'ms_monthly_summaries', 'ms_yearly_summaries',
-          'ms_recurring', 'ms_savings_goals'
+          'ms_recurring', 'ms_savings_goals', 'ms_deleted_records'
         ];
         ourKeys.forEach(k => localStorage.removeItem(k));
 
@@ -218,6 +251,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { if (!loading) db.set('ms_yearly_summaries', yearlySummaries); }, [yearlySummaries, loading]);
   useEffect(() => { if (!loading) db.set('ms_recurring', recurringTransactions); }, [recurringTransactions, loading]);
   useEffect(() => { if (!loading) db.set('ms_savings_goals', savingsGoals); }, [savingsGoals, loading]);
+  useEffect(() => { if (!loading) db.set('ms_deleted_records', deletedRecords); }, [deletedRecords, loading]);
+  useEffect(() => { if (!loading) db.set('ms_last_synced_at', lastSyncedAt); }, [lastSyncedAt, loading]);
 
   useEffect(() => {
     if (!loading) {
@@ -227,6 +262,447 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       else root.classList.remove('dark');
     }
   }, [theme, loading]);
+
+  // ─── Listen for Supabase Auth state changes ───────────────────────────────
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+      if (session) {
+        setUser(prev => ({
+          ...prev,
+          email: session.user.email || prev.email,
+          name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || prev.name
+        }));
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setAuthLoading(false);
+      if (session) {
+        setUser(prev => ({
+          ...prev,
+          email: session.user.email || prev.email,
+          name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || prev.name
+        }));
+      } else {
+        setUser(prev => ({ ...prev, email: undefined }));
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // ─── Listen for Online/Offline status ──────────────────────────────────────
+  useEffect(() => {
+    const handleOnline = () => {
+      showToast('Đã khôi phục kết nối mạng! Bắt đầu đồng bộ...', 'info');
+      syncData();
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [session, transactions, categories, wallets, debts, recurringTransactions, savingsGoals, monthlySummaries, yearlySummaries, deletedRecords]);
+
+  // ─── Auto-sync on successful sign-in ────────────────────────────────────────
+  useEffect(() => {
+    if (session && !loading) {
+      syncData(session);
+    }
+  }, [session?.user?.id, loading]);
+
+  // ─── AUTHENTICATION FUNCTIONS ──────────────────────────────────────────────
+  const login = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      showToast('Đăng nhập thành công!', 'success');
+      
+      // Sync immediately after login
+      setTimeout(() => syncData(data.session), 500);
+      return { success: true };
+    } catch (err: any) {
+      console.error('Lỗi đăng nhập:', err);
+      showToast(err.message || 'Đăng nhập thất bại.', 'error');
+      return { success: false, error: err.message };
+    }
+  };
+
+  const loginWithGoogle = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Lỗi đăng nhập Google:', err);
+      showToast('Đăng nhập Google thất bại: ' + err.message, 'error');
+    }
+  };
+
+  const register = async (email: string, password: string, name: string) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name
+          }
+        }
+      });
+      if (error) throw error;
+      showToast('Đăng ký tài khoản thành công!', 'success');
+
+      if (data.session) {
+        await supabase.from('user_profiles').upsert({
+          id: data.session.user.id,
+          name: name.trim(),
+          avatar_url: defaultUser.avatarUrl,
+          email,
+          updated_at: Date.now()
+        });
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Lỗi đăng ký:', err);
+      showToast(err.message || 'Đăng ký thất bại.', 'error');
+      return { success: false, error: err.message };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setSession(null);
+      setLastSyncedAt(null);
+      await db.remove('ms_last_synced_at');
+      showToast('Đã đăng xuất tài khoản.', 'info');
+    } catch (err: any) {
+      console.error('Lỗi đăng xuất:', err);
+      showToast('Không thể đăng xuất.', 'error');
+    }
+  };
+
+  // ─── CLOUD DATA SYNCHRONIZATION FUNCTION ──────────────────────────────────
+  const syncData = async (activeSession = session): Promise<boolean> => {
+    if (!activeSession) return false;
+    if (!window.navigator.onLine) {
+      showToast('Thiết bị đang ngoại tuyến. Sẽ đồng bộ khi có mạng.', 'info');
+      return false;
+    }
+
+    setIsSyncing(true);
+    const userId = activeSession.user.id;
+    const now = Date.now();
+
+    try {
+      // --- Helper to sync a standard table ---
+      const syncTable = async <T extends { id: string; updatedAt?: number; pendingSync?: boolean }>({
+        tableName,
+        localItems,
+        setLocalItems,
+        mapToDb,
+        mapFromDb,
+        deletedTableKey
+      }: {
+        tableName: string;
+        localItems: T[];
+        setLocalItems: React.Dispatch<React.SetStateAction<T[]>>;
+        mapToDb: (item: T, uid: string) => any;
+        mapFromDb: (row: any) => T;
+        deletedTableKey: string;
+      }) => {
+        // A. Upload changes
+        const pendingUpload = localItems.filter(item => item.pendingSync);
+        if (pendingUpload.length > 0) {
+          const dbRows = pendingUpload.map(item => mapToDb(item, userId));
+          const { error: uploadError } = await supabase
+            .from(tableName)
+            .upsert(dbRows);
+          
+          if (uploadError) throw uploadError;
+
+          setLocalItems(prev => prev.map(item => {
+            if (pendingUpload.some(p => p.id === item.id)) {
+              return { ...item, pendingSync: false };
+            }
+            return item;
+          }));
+        }
+
+        // B. Upload deletions
+        const pendingDeletions = deletedRecords.filter(r => r.table === deletedTableKey);
+        if (pendingDeletions.length > 0) {
+          const dbDeletions = pendingDeletions.map(r => ({
+            id: r.id,
+            user_id: userId,
+            is_deleted: true,
+            updated_at: r.updatedAt
+          }));
+
+          const { error: deleteError } = await supabase
+            .from(tableName)
+            .upsert(dbDeletions);
+
+          if (deleteError) throw deleteError;
+
+          setDeletedRecords(prev => prev.filter(r => !(r.table === deletedTableKey && pendingDeletions.some(pd => pd.id === r.id))));
+        }
+
+        // C. Download changes
+        const localMaxUpdated = localItems.reduce((max, item) => Math.max(max, item.updatedAt || 0), 0);
+        
+        const { data: cloudRows, error: downloadError } = await supabase
+          .from(tableName)
+          .select('*')
+          .eq('user_id', userId)
+          .gt('updated_at', localMaxUpdated);
+
+        if (downloadError) throw downloadError;
+
+        if (cloudRows && cloudRows.length > 0) {
+          let updatedLocalList = [...localItems];
+
+          cloudRows.forEach(row => {
+            const remoteItem = mapFromDb(row);
+
+            if (row.is_deleted) {
+              updatedLocalList = updatedLocalList.filter(item => item.id !== remoteItem.id);
+            } else {
+              const localIndex = updatedLocalList.findIndex(item => item.id === remoteItem.id);
+              if (localIndex !== -1) {
+                const localItem = updatedLocalList[localIndex];
+                if ((remoteItem.updatedAt || 0) > (localItem.updatedAt || 0)) {
+                  updatedLocalList[localIndex] = { ...remoteItem, pendingSync: false };
+                }
+              } else {
+                updatedLocalList.push({ ...remoteItem, pendingSync: false });
+              }
+            }
+          });
+
+          setLocalItems(updatedLocalList);
+        }
+      };
+
+      // Sync 6 core tables
+      await syncTable({
+        tableName: 'wallets',
+        localItems: wallets,
+        setLocalItems: setWallets,
+        mapToDb: mapWalletToDb,
+        mapFromDb: mapWalletFromDb,
+        deletedTableKey: 'wallets'
+      });
+
+      await syncTable({
+        tableName: 'categories',
+        localItems: categories,
+        setLocalItems: setCategories,
+        mapToDb: mapCategoryToDb,
+        mapFromDb: mapCategoryFromDb,
+        deletedTableKey: 'categories'
+      });
+
+      await syncTable({
+        tableName: 'transactions',
+        localItems: transactions,
+        setLocalItems: setTransactions,
+        mapToDb: mapTransactionToDb,
+        mapFromDb: mapTransactionFromDb,
+        deletedTableKey: 'transactions'
+      });
+
+      await syncTable({
+        tableName: 'debts',
+        localItems: debts,
+        setLocalItems: setDebts,
+        mapToDb: mapDebtToDb,
+        mapFromDb: mapDebtFromDb,
+        deletedTableKey: 'debts'
+      });
+
+      await syncTable({
+        tableName: 'recurring_transactions',
+        localItems: recurringTransactions,
+        setLocalItems: setRecurringTransactions,
+        mapToDb: mapRecurringToDb,
+        mapFromDb: mapRecurringFromDb,
+        deletedTableKey: 'recurring'
+      });
+
+      await syncTable({
+        tableName: 'savings_goals',
+        localItems: savingsGoals,
+        setLocalItems: setSavingsGoals,
+        mapToDb: mapSavingsGoalToDb,
+        mapFromDb: mapSavingsGoalFromDb,
+        deletedTableKey: 'savings_goals'
+      });
+
+      // Sync summaries
+      const syncSummaries = async () => {
+        // Upload Ms
+        const pendingMs = monthlySummaries.filter(m => m.pendingSync);
+        if (pendingMs.length > 0) {
+          const rows = pendingMs.map(m => mapMonthlySummaryToDb(m, userId));
+          const { error } = await supabase.from('monthly_summaries').upsert(rows);
+          if (error) throw error;
+          setMonthlySummaries(prev => prev.map(m => pendingMs.some(p => p.monthId === m.monthId) ? { ...m, pendingSync: false } : m));
+        }
+
+        // Upload deleted Ms
+        const pendingMsDeletions = deletedRecords.filter(r => r.table === 'monthly_summaries');
+        if (pendingMsDeletions.length > 0) {
+          const rows = pendingMsDeletions.map(r => ({ id: r.id, user_id: userId, is_deleted: true, updated_at: r.updatedAt }));
+          const { error } = await supabase.from('monthly_summaries').upsert(rows);
+          if (error) throw error;
+          setDeletedRecords(prev => prev.filter(r => !(r.table === 'monthly_summaries' && pendingMsDeletions.some(pd => pd.id === r.id))));
+        }
+
+        // Download Ms
+        const localMsMax = monthlySummaries.reduce((max, m) => Math.max(max, m.updatedAt || 0), 0);
+        const { data: cloudMs, error: errMs } = await supabase.from('monthly_summaries').select('*').eq('user_id', userId).gt('updated_at', localMsMax);
+        if (errMs) throw errMs;
+        if (cloudMs && cloudMs.length > 0) {
+          let updatedMs = [...monthlySummaries];
+          cloudMs.forEach(row => {
+            const remoteItem = mapMonthlySummaryFromDb(row);
+            if (row.is_deleted) {
+              updatedMs = updatedMs.filter(m => m.monthId !== remoteItem.monthId);
+            } else {
+              const idx = updatedMs.findIndex(m => m.monthId === remoteItem.monthId);
+              if (idx !== -1) {
+                if ((remoteItem.updatedAt || 0) > (updatedMs[idx].updatedAt || 0)) {
+                  updatedMs[idx] = { ...remoteItem, pendingSync: false };
+                }
+              } else {
+                updatedMs.push({ ...remoteItem, pendingSync: false });
+              }
+            }
+          });
+          setMonthlySummaries(updatedMs.sort((a, b) => b.monthId.localeCompare(a.monthId)));
+        }
+
+        // Upload Ys
+        const pendingYs = yearlySummaries.filter(y => y.pendingSync);
+        if (pendingYs.length > 0) {
+          const rows = pendingYs.map(y => mapYearlySummaryToDb(y, userId));
+          const { error } = await supabase.from('yearly_summaries').upsert(rows);
+          if (error) throw error;
+          setYearlySummaries(prev => prev.map(y => pendingYs.some(p => p.yearId === y.yearId) ? { ...y, pendingSync: false } : y));
+        }
+
+        const localYsMax = yearlySummaries.reduce((max, y) => Math.max(max, y.updatedAt || 0), 0);
+        const { data: cloudYs, error: errYs } = await supabase.from('yearly_summaries').select('*').eq('user_id', userId).gt('updated_at', localYsMax);
+        if (errYs) throw errYs;
+        if (cloudYs && cloudYs.length > 0) {
+          let updatedYs = [...yearlySummaries];
+          cloudYs.forEach(row => {
+            const remoteItem = mapYearlySummaryFromDb(row);
+            if (row.is_deleted) {
+              updatedYs = updatedYs.filter(y => y.yearId !== remoteItem.yearId);
+            } else {
+              const idx = updatedYs.findIndex(y => y.yearId === remoteItem.yearId);
+              if (idx !== -1) {
+                if ((remoteItem.updatedAt || 0) > (updatedYs[idx].updatedAt || 0)) {
+                  updatedYs[idx] = { ...remoteItem, pendingSync: false };
+                }
+              } else {
+                updatedYs.push({ ...remoteItem, pendingSync: false });
+              }
+            }
+          });
+          setYearlySummaries(updatedYs);
+        }
+      };
+
+      await syncSummaries();
+
+      // Profile sync
+      const { data: cloudProfile, error: profileErr } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (profileErr && profileErr.code !== 'PGRST116') throw profileErr;
+
+      const localProfileUpdated = (user as any).updatedAt || 0;
+      if (cloudProfile) {
+        const remoteProfile = {
+          name: cloudProfile.name,
+          avatarUrl: cloudProfile.avatar_url,
+          email: cloudProfile.email
+        };
+        if (cloudProfile.updated_at > localProfileUpdated) {
+          setUser({ ...remoteProfile, updatedAt: cloudProfile.updated_at } as any);
+        } else if (localProfileUpdated > cloudProfile.updated_at) {
+          await supabase.from('user_profiles').upsert({
+            id: userId,
+            name: user.name,
+            avatar_url: user.avatarUrl,
+            email: user.email || null,
+            updated_at: localProfileUpdated
+          });
+        }
+      } else {
+        await supabase.from('user_profiles').upsert({
+          id: userId,
+          name: user.name,
+          avatar_url: user.avatarUrl,
+          email: user.email || null,
+          updated_at: localProfileUpdated || now
+        });
+      }
+
+      // Theme sync
+      const { data: cloudThemeRow, error: themeErr } = await supabase
+        .from('app_theme')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (themeErr && themeErr.code !== 'PGRST116') throw themeErr;
+
+      const localThemeUpdated = (theme as any).updatedAt || 0;
+      if (cloudThemeRow) {
+        if (cloudThemeRow.updated_at > localThemeUpdated) {
+          setThemeState(cloudThemeRow.theme);
+        } else if (localThemeUpdated > cloudThemeRow.updated_at) {
+          await supabase.from('app_theme').upsert({
+            user_id: userId,
+            theme,
+            updated_at: localThemeUpdated
+          });
+        }
+      } else {
+        await supabase.from('app_theme').upsert({
+          user_id: userId,
+          theme,
+          updated_at: now
+        });
+      }
+
+      setLastSyncedAt(now);
+      showToast('Đồng bộ dữ liệu thành công!', 'success');
+      return true;
+    } catch (err: any) {
+      console.error('Lỗi khi đồng bộ đám mây:', err);
+      showToast('Lỗi đồng bộ dữ liệu: ' + (err.message || 'Mất kết nối.'), 'error');
+      return false;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
 
   // ─── Auto-execute Recurring Transactions on app open ─────────────────────
   useEffect(() => {
@@ -457,13 +933,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       categoryId,
       walletId,
       date,
-      note: note.trim() || (type === 'income' ? 'Thu nhập khác' : 'Chi tiêu khác')
+      note: note.trim() || (type === 'income' ? 'Thu nhập khác' : 'Chi tiêu khác'),
+      updatedAt: Date.now(),
+      pendingSync: true
     };
 
     setTransactions(prev => [newTx, ...prev]);
     setWallets(prev => prev.map(w => {
       if (w.id !== walletId) return w;
-      return { ...w, balance: type === 'income' ? w.balance + amount : w.balance - amount };
+      return { ...w, balance: type === 'income' ? w.balance + amount : w.balance - amount, updatedAt: Date.now(), pendingSync: true };
     }));
   };
 
@@ -482,19 +960,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Revert old wallet balance
     let updatedWallets = wallets.map(w => {
       if (w.id !== oldTx.walletId) return w;
-      return { ...w, balance: oldTx.type === 'income' ? w.balance - oldTx.amount : w.balance + oldTx.amount };
+      return { ...w, balance: oldTx.type === 'income' ? w.balance - oldTx.amount : w.balance + oldTx.amount, updatedAt: Date.now(), pendingSync: true };
     });
 
     // Apply new wallet balance
     updatedWallets = updatedWallets.map(w => {
       if (w.id !== walletId) return w;
-      return { ...w, balance: type === 'income' ? w.balance + amount : w.balance - amount };
+      const currentBalance = w.balance;
+      return { ...w, balance: type === 'income' ? currentBalance + amount : currentBalance - amount, updatedAt: Date.now(), pendingSync: true };
     });
 
     setWallets(updatedWallets);
     setTransactions(prev => prev.map(t => t.id === id ? {
       ...t, id, amount, type, categoryId, walletId, date,
-      note: note.trim() || (type === 'income' ? 'Thu nhập khác' : 'Chi tiêu khác')
+      note: note.trim() || (type === 'income' ? 'Thu nhập khác' : 'Chi tiêu khác'),
+      updatedAt: Date.now(),
+      pendingSync: true
     } : t));
   };
 
@@ -503,9 +984,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!tx) { showToast('Giao dịch không tồn tại.', 'error'); return; }
 
     setTransactions(prev => prev.filter(t => t.id !== id));
+    setDeletedRecords(prev => [...prev, { id, table: 'transactions', updatedAt: Date.now() }]);
     setWallets(prev => prev.map(w => {
       if (w.id !== tx.walletId) return w;
-      return { ...w, balance: tx.type === 'income' ? w.balance - tx.amount : w.balance + tx.amount };
+      return { ...w, balance: tx.type === 'income' ? w.balance - tx.amount : w.balance + tx.amount, updatedAt: Date.now(), pendingSync: true };
     }));
   };
 
@@ -518,7 +1000,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (type === 'cash') {
       const existingCash = wallets.find(w => w.type === 'cash');
       if (existingCash) {
-        setWallets(prev => prev.map(w => w.type === 'cash' ? { ...w, name, balance: w.balance + balance } : w));
+        setWallets(prev => prev.map(w => w.type === 'cash' ? { ...w, name, balance: w.balance + balance, updatedAt: Date.now(), pendingSync: true } : w));
         return;
       }
     }
@@ -528,7 +1010,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       name: name.trim(),
       type,
       balance,
-      icon
+      icon,
+      updatedAt: Date.now(),
+      pendingSync: true
     };
     setWallets(prev => [...prev, newWallet]);
   };
@@ -537,7 +1021,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const wallet = wallets.find(w => w.id === id);
     if (!wallet) { showToast('Ví không tồn tại.', 'error'); return; }
     if (amount < 0) { showToast('Số dư không được âm.', 'error'); return; }
-    setWallets(prev => prev.map(w => w.id === id ? { ...w, balance: amount } : w));
+    setWallets(prev => prev.map(w => w.id === id ? { ...w, balance: amount, updatedAt: Date.now(), pendingSync: true } : w));
   };
 
   const transferFunds = (fromId: string, toId: string, amount: number): boolean => {
@@ -549,8 +1033,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (fromW.balance < amount) { showToast('Số dư ví không đủ để chuyển.', 'error'); return false; }
 
     setWallets(prev => prev.map(w => {
-      if (w.id === fromId) return { ...w, balance: w.balance - amount };
-      if (w.id === toId) return { ...w, balance: w.balance + amount };
+      if (w.id === fromId) return { ...w, balance: w.balance - amount, updatedAt: Date.now(), pendingSync: true };
+      if (w.id === toId) return { ...w, balance: w.balance + amount, updatedAt: Date.now(), pendingSync: true };
       return w;
     }));
 
@@ -561,7 +1045,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       categoryId: 'transfer',
       walletId: fromId,
       date: new Date().toISOString().split('T')[0],
-      note: `Chuyển tiền đến ${toW.name}`
+      note: `Chuyển tiền đến ${toW.name}`,
+      updatedAt: Date.now(),
+      pendingSync: true
     };
 
     const newTxTo: Transaction = {
@@ -571,7 +1057,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       categoryId: 'transfer',
       walletId: toId,
       date: new Date().toISOString().split('T')[0],
-      note: `Nhận tiền từ ${fromW.name}`
+      note: `Nhận tiền từ ${fromW.name}`,
+      updatedAt: Date.now(),
+      pendingSync: true
     };
 
     setTransactions(prev => [newTxFrom, newTxTo, ...prev]);
@@ -582,15 +1070,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const wallet = wallets.find(w => w.id === id);
     if (!wallet) { showToast('Ví không tồn tại.', 'error'); return; }
     if (wallet.type === 'cash') { showToast('Không thể xóa ví tiền mặt.', 'error'); return; }
+    
     setWallets(prev => prev.filter(w => w.id !== id));
+    setDeletedRecords(prev => [...prev, { id, table: 'wallets', updatedAt: Date.now() }]);
+
+    const txsInWallet = transactions.filter(t => t.walletId === id);
     setTransactions(prev => prev.filter(t => t.walletId !== id));
+    setDeletedRecords(prev => [
+      ...prev,
+      ...txsInWallet.map(t => ({ id: t.id, table: 'transactions', updatedAt: Date.now() }))
+    ]);
   };
 
   // ─── Categories ───────────────────────────────────────────────────────────
   const addCategory = (name: string, color: string, icon: string, budget: number, type: TransactionType) => {
     if (!name.trim()) { showToast('Tên danh mục không được để trống.', 'error'); return; }
     if (budget < 0) { showToast('Ngân sách không được âm.', 'error'); return; }
-    const newCat: Category = { id: `cat-${Date.now()}`, name: name.trim(), color, icon, budget, type };
+    const newCat: Category = { id: `cat-${Date.now()}`, name: name.trim(), color, icon, budget, type, updatedAt: Date.now(), pendingSync: true };
     setCategories(prev => [...prev, newCat]);
   };
 
@@ -599,16 +1095,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!cat) { showToast('Danh mục không tồn tại.', 'error'); return; }
     if (!name.trim()) { showToast('Tên danh mục không được để trống.', 'error'); return; }
     if (budget < 0) { showToast('Ngân sách không được âm.', 'error'); return; }
-    setCategories(prev => prev.map(c => c.id === id ? { ...c, name: name.trim(), color, icon, budget, type } : c));
+    setCategories(prev => prev.map(c => c.id === id ? { ...c, name: name.trim(), color, icon, budget, type, updatedAt: Date.now(), pendingSync: true } : c));
   };
 
   const updateCategoryBudget = (id: string, budget: number) => {
     if (budget < 0) { showToast('Ngân sách không được âm.', 'error'); return; }
-    setCategories(prev => prev.map(c => c.id === id ? { ...c, budget } : c));
+    setCategories(prev => prev.map(c => c.id === id ? { ...c, budget, updatedAt: Date.now(), pendingSync: true } : c));
   };
 
   const updateCategoryColor = (id: string, color: string) => {
-    setCategories(prev => prev.map(c => c.id === id ? { ...c, color } : c));
+    setCategories(prev => prev.map(c => c.id === id ? { ...c, color, updatedAt: Date.now(), pendingSync: true } : c));
   };
 
   // ─── Debts ────────────────────────────────────────────────────────────────
@@ -632,7 +1128,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type,
       status: 'active',
       repaymentMethod,
-      notes: notes?.trim()
+      notes: notes?.trim(),
+      updatedAt: Date.now(),
+      pendingSync: true
     };
     setDebts(prev => [newDebt, ...prev]);
   };
@@ -640,13 +1138,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toggleDebtStatus = (id: string) => {
     const debt = debts.find(d => d.id === id);
     if (!debt) { showToast('Khoản nợ không tồn tại.', 'error'); return; }
-    setDebts(prev => prev.map(d => d.id === id ? { ...d, status: d.status === 'active' ? 'paid' : 'active' } : d));
+    setDebts(prev => prev.map(d => d.id === id ? { ...d, status: d.status === 'active' ? 'paid' : 'active', updatedAt: Date.now(), pendingSync: true } : d));
   };
 
   const deleteDebt = (id: string) => {
     const debt = debts.find(d => d.id === id);
     if (!debt) { showToast('Khoản nợ không tồn tại.', 'error'); return; }
     setDebts(prev => prev.filter(d => d.id !== id));
+    setDeletedRecords(prev => [...prev, { id, table: 'debts', updatedAt: Date.now() }]);
   };
 
   // ─── Recurring Transactions ───────────────────────────────────────────────
@@ -677,7 +1176,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       totalOccurrences,
       executedCount: 0,
       status: 'active',
-      lastExecutedDate: undefined
+      lastExecutedDate: undefined,
+      updatedAt: Date.now(),
+      pendingSync: true
     };
     setRecurringTransactions(prev => [newRt, ...prev]);
     showToast('Đã tạo giao dịch định kỳ mới!', 'success');
@@ -690,20 +1191,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (updates.endDate && updates.startDate && updates.endDate <= (updates.startDate || rt.startDate)) {
       showToast('Ngày kết thúc phải sau ngày bắt đầu.', 'error'); return;
     }
-    setRecurringTransactions(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
+    setRecurringTransactions(prev => prev.map(r => r.id === id ? { ...r, ...updates, updatedAt: Date.now(), pendingSync: true } : r));
   };
 
   const deleteRecurringTransaction = (id: string) => {
     const rt = recurringTransactions.find(r => r.id === id);
     if (!rt) { showToast('Giao dịch định kỳ không tồn tại.', 'error'); return; }
     setRecurringTransactions(prev => prev.filter(r => r.id !== id));
+    setDeletedRecords(prev => [...prev, { id, table: 'recurring', updatedAt: Date.now() }]);
   };
 
   const pauseRecurringTransaction = (id: string) => {
     const rt = recurringTransactions.find(r => r.id === id);
     if (!rt) { showToast('Giao dịch định kỳ không tồn tại.', 'error'); return; }
     if (rt.status !== 'active') { showToast('Chỉ có thể tạm dừng giao dịch đang hoạt động.', 'error'); return; }
-    setRecurringTransactions(prev => prev.map(r => r.id === id ? { ...r, status: 'paused' } : r));
+    setRecurringTransactions(prev => prev.map(r => r.id === id ? { ...r, status: 'paused', updatedAt: Date.now(), pendingSync: true } : r));
     showToast('Đã tạm dừng giao dịch định kỳ.', 'info');
   };
 
@@ -711,7 +1213,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const rt = recurringTransactions.find(r => r.id === id);
     if (!rt) { showToast('Giao dịch định kỳ không tồn tại.', 'error'); return; }
     if (rt.status !== 'paused') { showToast('Chỉ có thể tiếp tục giao dịch đang tạm dừng.', 'error'); return; }
-    setRecurringTransactions(prev => prev.map(r => r.id === id ? { ...r, status: 'active' } : r));
+    setRecurringTransactions(prev => prev.map(r => r.id === id ? { ...r, status: 'active', updatedAt: Date.now(), pendingSync: true } : r));
     showToast('Đã tiếp tục giao dịch định kỳ.', 'success');
   };
 
@@ -733,7 +1235,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       currentAmount: 0,
       deadline,
       notes: notes?.trim(),
-      createdAt: new Date().toISOString().split('T')[0]
+      createdAt: new Date().toISOString().split('T')[0],
+      updatedAt: Date.now(),
+      pendingSync: true
     };
     setSavingsGoals(prev => [newGoal, ...prev]);
     showToast('Đã tạo heo đất tiết kiệm mới!', 'success');
@@ -745,13 +1249,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (updates.targetAmount !== undefined && updates.targetAmount <= 0) {
       showToast('Số tiền mục tiêu phải lớn hơn 0.', 'error'); return;
     }
-    setSavingsGoals(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
+    setSavingsGoals(prev => prev.map(g => g.id === id ? { ...g, ...updates, updatedAt: Date.now(), pendingSync: true } : g));
   };
 
   const deleteSavingsGoal = (id: string) => {
     const goal = savingsGoals.find(g => g.id === id);
     if (!goal) { showToast('Mục tiêu tiết kiệm không tồn tại.', 'error'); return; }
     setSavingsGoals(prev => prev.filter(g => g.id !== id));
+    setDeletedRecords(prev => [...prev, { id, table: 'savings_goals', updatedAt: Date.now() }]);
   };
 
   const depositToSavingsGoal = (goalId: string, walletId: string, amount: number) => {
@@ -765,12 +1270,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (amount > remaining) { showToast(`Bạn chỉ cần nạp thêm ${new Intl.NumberFormat('vi-VN').format(remaining)}đ để hoàn thành mục tiêu.`, 'info'); return; }
 
     // Trừ ví
-    setWallets(prev => prev.map(w => w.id === walletId ? { ...w, balance: w.balance - amount } : w));
+    setWallets(prev => prev.map(w => w.id === walletId ? { ...w, balance: w.balance - amount, updatedAt: Date.now(), pendingSync: true } : w));
     // Cộng vào goal
     setSavingsGoals(prev => prev.map(g => {
       if (g.id !== goalId) return g;
       const newAmount = g.currentAmount + amount;
-      return { ...g, currentAmount: newAmount };
+      return { ...g, currentAmount: newAmount, updatedAt: Date.now(), pendingSync: true };
     }));
 
     // Ghi transaction
@@ -781,7 +1286,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       categoryId: 'savings',
       walletId,
       date: new Date().toISOString().split('T')[0],
-      note: `Tiết kiệm: ${goal.name}`
+      note: `Tiết kiệm: ${goal.name}`,
+      updatedAt: Date.now(),
+      pendingSync: true
     }, ...prev]);
 
     const newTotal = goal.currentAmount + amount;
@@ -800,8 +1307,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!amount || amount <= 0) { showToast('Số tiền phải lớn hơn 0.', 'error'); return; }
     if (amount > goal.currentAmount) { showToast('Số tiền rút vượt quá số dư trong heo đất.', 'error'); return; }
 
-    setWallets(prev => prev.map(w => w.id === walletId ? { ...w, balance: w.balance + amount } : w));
-    setSavingsGoals(prev => prev.map(g => g.id === goalId ? { ...g, currentAmount: g.currentAmount - amount } : g));
+    setWallets(prev => prev.map(w => w.id === walletId ? { ...w, balance: w.balance + amount, updatedAt: Date.now(), pendingSync: true } : w));
+    setSavingsGoals(prev => prev.map(g => g.id === goalId ? { ...g, currentAmount: g.currentAmount - amount, updatedAt: Date.now(), pendingSync: true } : g));
 
     setTransactions(prev => [{
       id: `tx-sw-${Date.now()}`,
@@ -810,18 +1317,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       categoryId: 'savings',
       walletId,
       date: new Date().toISOString().split('T')[0],
-      note: `Rút từ heo đất: ${goal.name}`
+      note: `Rút từ heo đất: ${goal.name}`,
+      updatedAt: Date.now(),
+      pendingSync: true
     }, ...prev]);
 
     showToast(`Đã rút ${new Intl.NumberFormat('vi-VN').format(amount)}đ từ "${goal.name}" về ví!`, 'info');
   };
 
   // ─── Theme & Profile ──────────────────────────────────────────────────────
-  const setTheme = (t: 'light' | 'dark') => setThemeState(t);
+  const setTheme = (t: 'light' | 'dark') => {
+    setThemeState(t);
+    localStorage.setItem('ms_theme_updated_at', Date.now().toString());
+  };
 
   const updateProfile = (name: string, avatarUrl: string, email?: string) => {
     if (!name.trim()) { showToast('Tên không được để trống.', 'error'); return; }
-    setUser({ name: name.trim(), avatarUrl, email });
+    setUser({ name: name.trim(), avatarUrl, email, updatedAt: Date.now() } as any);
   };
 
   // ─── Generate Email HTML ──────────────────────────────────────────────────
@@ -933,14 +1445,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       aiComment += `Hãy đặt hạn mức chi tiêu hàng tháng để kiểm soát dòng tiền tốt hơn!`;
     }
 
-    const newSummary: MonthlySummary = { monthId, totalIncome, totalExpense, categories: categoriesMap, aiComment };
+    const newSummary: MonthlySummary = { monthId, totalIncome, totalExpense, categories: categoriesMap, aiComment, updatedAt: Date.now(), pendingSync: true };
 
     setMonthlySummaries(prev => {
       const filtered = prev.filter(s => s.monthId !== monthId);
       return [...filtered, newSummary].sort((a, b) => b.monthId.localeCompare(a.monthId));
     });
 
-    setTransactions(prev => prev.filter(t => !t.date.startsWith(monthId)));
+    setTransactions(prev => {
+      const remaining = prev.filter(t => !t.date.startsWith(monthId));
+      const deletedTxs = prev.filter(t => t.date.startsWith(monthId));
+      setDeletedRecords(d => [
+        ...d,
+        ...deletedTxs.map(t => ({ id: t.id, table: 'transactions', updatedAt: Date.now() }))
+      ]);
+      return remaining;
+    });
     return newSummary;
   };
 
@@ -1025,6 +1545,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       user, theme, toasts, monthlySummaries, yearlySummaries,
       compactMonthData, sendEmailJSReport, generateEmailHTML,
       showToast, confirm,
+      session, authLoading, isSyncing, lastSyncedAt, login, loginWithGoogle, register, logout, syncData,
       addTransaction, updateTransaction, deleteTransaction,
       addWallet, updateWalletBalance, transferFunds, deleteWallet,
       addCategory, updateCategory, updateCategoryBudget, updateCategoryColor,
