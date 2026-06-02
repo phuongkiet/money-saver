@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconRenderer } from './IconRenderer';
-import { Sun, Moon, Plus, ArrowLeftRight, Download, Upload, Trash2, Smartphone, Building2, Wallet as WalletIcon, Camera, X } from 'lucide-react';
+import { Sun, Moon, Plus, ArrowLeftRight, Download, Upload, Trash2, Smartphone, Building2, Wallet as WalletIcon, Camera, X, FileSpreadsheet, FileText } from 'lucide-react';
 import { formatThousand, parseThousand } from '../utils/format';
+import * as XLSX from 'xlsx';
+import { CustomSelect } from './CustomSelect';
 
 const compressAvatar = (file: File, maxSize: number = 150): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -49,7 +51,10 @@ const compressAvatar = (file: File, maxSize: number = 150): Promise<string> => {
 };
 
 export const ProfileTab: React.FC = () => {
-  const { user, wallets, theme, setTheme, updateProfile, addWallet, transferFunds, resetData, deleteWallet, showToast, confirm } = useApp();
+  const { user, wallets, transactions, categories, debts, savingsGoals, recurringTransactions, theme, setTheme, updateProfile, addWallet, transferFunds, resetData, deleteWallet, showToast, confirm } = useApp();
+
+  // Export states
+  const [showExportSection, setShowExportSection] = useState(false);
 
   // Edit profile states
   const [name, setName] = useState(user.name);
@@ -176,6 +181,160 @@ export const ProfileTab: React.FC = () => {
       deleteWallet(walletId);
       showToast(`Đã xóa ví "${name}" và toàn bộ giao dịch liên quan thành công!`, 'success');
     }
+  };
+
+  // ─── Export CSV ──────────────────────────────────────────────────────────
+  const handleExportCSV = () => {
+    if (transactions.length === 0) {
+      showToast('Chưa có giao dịch nào để xuất.', 'error');
+      return;
+    }
+
+    const headers = ['Ngày', 'Loại', 'Số tiền (VNĐ)', 'Danh mục', 'Ví', 'Ghi chú'];
+    const rows = transactions.map(tx => {
+      const cat = categories.find(c => c.id === tx.categoryId);
+      const wallet = wallets.find(w => w.id === tx.walletId);
+      return [
+        tx.date,
+        tx.type === 'income' ? 'Thu nhập' : 'Chi tiêu',
+        tx.amount,
+        cat?.name || tx.categoryId,
+        wallet?.name || tx.walletId,
+        tx.note
+      ];
+    });
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const BOM = '\uFEFF'; // UTF-8 BOM for Excel compatibility
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `MoneySaver_GiaoDich_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Xuất CSV thành công!', 'success');
+  };
+
+  // ─── Export Excel (.xlsx) ─────────────────────────────────────────────────
+  const handleExportXLSX = () => {
+    if (transactions.length === 0 && debts.length === 0 && savingsGoals.length === 0) {
+      showToast('Chưa có dữ liệu nào để xuất.', 'error');
+      return;
+    }
+
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Transactions
+    if (transactions.length > 0) {
+      const txData = [
+        ['Ngày', 'Loại', 'Số tiền (VNĐ)', 'Danh mục', 'Ví', 'Ghi chú'],
+        ...transactions.map(tx => {
+          const cat = categories.find(c => c.id === tx.categoryId);
+          const wallet = wallets.find(w => w.id === tx.walletId);
+          return [
+            tx.date,
+            tx.type === 'income' ? 'Thu nhập' : 'Chi tiêu',
+            tx.amount,
+            cat?.name || tx.categoryId,
+            wallet?.name || tx.walletId,
+            tx.note
+          ];
+        })
+      ];
+      const txSheet = XLSX.utils.aoa_to_sheet(txData);
+      txSheet['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 30 }];
+      XLSX.utils.book_append_sheet(wb, txSheet, 'Giao dịch');
+    }
+
+    // Sheet 2: Category Summary
+    if (categories.length > 0) {
+      const currentMonth = new Date().toISOString().substring(0, 7);
+      const catData = [
+        ['Danh mục', 'Ngân sách tháng (VNĐ)', 'Chi tiêu tháng này (VNĐ)', 'Chênh lệch (VNĐ)', 'Trạng thái'],
+        ...categories.map(cat => {
+          const spent = transactions
+            .filter(t => t.type === 'expense' && t.categoryId === cat.id && t.date.startsWith(currentMonth))
+            .reduce((s, t) => s + t.amount, 0);
+          const diff = cat.budget > 0 ? cat.budget - spent : 0;
+          const status = cat.budget === 0 ? 'Chưa đặt hạn mức' : diff >= 0 ? 'An toàn' : 'Vượt ngân sách';
+          return [cat.name, cat.budget, spent, diff, status];
+        })
+      ];
+      const catSheet = XLSX.utils.aoa_to_sheet(catData);
+      catSheet['!cols'] = [{ wch: 20 }, { wch: 22 }, { wch: 22 }, { wch: 18 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, catSheet, 'Ngân sách danh mục');
+    }
+
+    // Sheet 3: Debts
+    if (debts.length > 0) {
+      const debtData = [
+        ['Tên khoản nợ', 'Loại', 'Số tiền gốc (VNĐ)', 'Lãi suất (%/năm)', 'Kỳ hạn (tháng)', 'Ngày bắt đầu', 'Trạng thái', 'Ghi chú'],
+        ...debts.map(d => [
+          d.name,
+          d.type === 'to_pay' ? 'Nợ phải trả' : 'Cho vay (thu hồi)',
+          d.amount,
+          d.interestRate,
+          d.termMonths,
+          d.startDate,
+          d.status === 'active' ? 'Đang hoạt động' : 'Đã tất toán',
+          d.notes || ''
+        ])
+      ];
+      const debtSheet = XLSX.utils.aoa_to_sheet(debtData);
+      debtSheet['!cols'] = [{ wch: 24 }, { wch: 20 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 30 }];
+      XLSX.utils.book_append_sheet(wb, debtSheet, 'Nợ & Vay');
+    }
+
+    // Sheet 4: Savings Goals
+    if (savingsGoals.length > 0) {
+      const goalData = [
+        ['Mục tiêu', 'Số tiền mục tiêu (VNĐ)', 'Đã tích lũy (VNĐ)', 'Còn thiếu (VNĐ)', 'Tiến độ (%)', 'Hạn chót', 'Ghi chú'],
+        ...savingsGoals.map(g => [
+          g.name,
+          g.targetAmount,
+          g.currentAmount,
+          Math.max(0, g.targetAmount - g.currentAmount),
+          ((g.currentAmount / g.targetAmount) * 100).toFixed(1) + '%',
+          g.deadline || 'Không có',
+          g.notes || ''
+        ])
+      ];
+      const goalSheet = XLSX.utils.aoa_to_sheet(goalData);
+      goalSheet['!cols'] = [{ wch: 24 }, { wch: 22 }, { wch: 20 }, { wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 30 }];
+      XLSX.utils.book_append_sheet(wb, goalSheet, 'Heo đất tiết kiệm');
+    }
+
+    // Sheet 5: Recurring Transactions
+    if (recurringTransactions.length > 0) {
+      const rcData = [
+        ['Ghi chú', 'Loại', 'Số tiền (VNĐ)', 'Tần suất', 'Ngày bắt đầu', 'Ngày kết thúc', 'Số kỳ', 'Đã thực thi', 'Trạng thái'],
+        ...recurringTransactions.map(rt => {
+          const freqLabel: Record<string, string> = { daily: 'Hàng ngày', weekly: 'Hàng tuần', monthly: 'Hàng tháng' };
+          const statusLabel: Record<string, string> = { active: 'Đang chạy', paused: 'Tạm dừng', completed: 'Hoàn tất' };
+          return [
+            rt.note,
+            rt.type === 'income' ? 'Thu nhập' : 'Chi tiêu',
+            rt.amount,
+            freqLabel[rt.frequency],
+            rt.startDate,
+            rt.endDate || 'Không có',
+            rt.totalOccurrences || 'Không giới hạn',
+            rt.executedCount,
+            statusLabel[rt.status]
+          ];
+        })
+      ];
+      const rcSheet = XLSX.utils.aoa_to_sheet(rcData);
+      XLSX.utils.book_append_sheet(wb, rcSheet, 'Giao dịch định kỳ');
+    }
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `MoneySaver_BaoCao_${dateStr}.xlsx`);
+    showToast('Xuất Excel thành công! File đã được tải về.', 'success');
   };
 
   // Export JSON backup
@@ -354,27 +513,19 @@ export const ProfileTab: React.FC = () => {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-[9px] text-zinc-400 dark:text-zinc-500 uppercase font-bold">Từ ví</label>
-                <select
+                <CustomSelect
                   value={fromWalletId}
-                  onChange={(e) => setFromWalletId(e.target.value)}
-                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-2 py-2 text-xs font-medium font-vietnam focus:outline-none"
-                >
-                  {wallets.map(w => (
-                    <option key={w.id} value={w.id}>{w.name} ({formatVND(w.balance)})</option>
-                  ))}
-                </select>
+                  onChange={setFromWalletId}
+                  options={wallets.map(w => ({ value: w.id, label: `${w.name} (${formatVND(w.balance)})` }))}
+                />
               </div>
               <div className="space-y-1">
                 <label className="text-[9px] text-zinc-400 dark:text-zinc-500 uppercase font-bold">Đến ví</label>
-                <select
+                <CustomSelect
                   value={toWalletId}
-                  onChange={(e) => setToWalletId(e.target.value)}
-                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-2 py-2 text-xs font-medium font-vietnam focus:outline-none"
-                >
-                  {wallets.map(w => (
-                    <option key={w.id} value={w.id}>{w.name} ({formatVND(w.balance)})</option>
-                  ))}
-                </select>
+                  onChange={setToWalletId}
+                  options={wallets.map(w => ({ value: w.id, label: `${w.name} (${formatVND(w.balance)})` }))}
+                />
               </div>
             </div>
 
@@ -624,6 +775,54 @@ export const ProfileTab: React.FC = () => {
           </div>
         )}
       </section> */}
+
+      {/* 4.5. Export Spreadsheet Section */}
+      <section className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-3xl p-5 shadow-[0_4px_16px_rgba(0,0,0,0.02)] space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold font-vietnam text-zinc-800 dark:text-zinc-100 flex items-center gap-1.5">
+            <FileSpreadsheet size={16} className="text-emerald-500" />
+            Xuất báo cáo bảng tính
+          </h3>
+          <button
+            onClick={() => setShowExportSection(!showExportSection)}
+            className="text-[10px] font-bold font-vietnam text-[#6f8d6d] hover:underline"
+          >
+            {showExportSection ? 'Ẩn' : 'Xem thêm'}
+          </button>
+        </div>
+
+        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-vietnam leading-relaxed">
+          Xuất toàn bộ dữ liệu ra file bảng tính để mở bằng Excel hoặc Google Sheets. Tất cả xử lý trực tiếp trên trình duyệt, không cần server.
+        </p>
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center justify-center gap-1.5 py-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold font-vietnam rounded-2xl hover:bg-emerald-100 dark:hover:bg-emerald-950/30 transition-all"
+          >
+            <FileText size={15} />
+            Xuất CSV
+          </button>
+          <button
+            onClick={handleExportXLSX}
+            className="flex items-center justify-center gap-1.5 py-3 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs font-bold font-vietnam rounded-2xl hover:bg-indigo-100 dark:hover:bg-indigo-950/30 transition-all"
+          >
+            <FileSpreadsheet size={15} />
+            Xuất Excel (.xlsx)
+          </button>
+        </div>
+
+        {showExportSection && (
+          <div className="bg-zinc-50 dark:bg-zinc-950/40 rounded-2xl p-3 space-y-1.5 text-[10px] font-vietnam text-zinc-400 dark:text-zinc-500 border border-zinc-100 dark:border-zinc-800">
+            <p className="font-bold text-zinc-600 dark:text-zinc-300 text-[11px]">File Excel bao gồm các sheet:</p>
+            <p>📋 <strong>Giao dịch</strong> – Toàn bộ lịch sử ({transactions.length} giao dịch)</p>
+            <p>📊 <strong>Ngân sách danh mục</strong> – Chi tiêu vs hạn mức tháng này</p>
+            <p>💳 <strong>Nợ & Vay</strong> – Danh sách khoản nợ ({debts.length} khoản)</p>
+            <p>🐷 <strong>Heo đất tiết kiệm</strong> – Tiến độ mục tiêu ({savingsGoals.length} mục)</p>
+            <p>🔁 <strong>Giao dịch định kỳ</strong> – Lịch tự động ({recurringTransactions.length} giao dịch)</p>
+          </div>
+        )}
+      </section>
 
       {/* 5. System Settings (Cài đặt hệ thống) */}
       <section className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-3xl p-5 shadow-[0_4px_16px_rgba(0,0,0,0.02)] space-y-4">

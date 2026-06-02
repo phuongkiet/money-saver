@@ -20,7 +20,6 @@ function AppContent() {
     return <Onboarding onComplete={() => setIsOnboarded(true)} />;
   }
 
-  // Render active screen tab
   const renderTabContent = () => {
     switch (activeTab) {
       case 0:
@@ -52,13 +51,10 @@ function AppContent() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-850 dark:text-zinc-100 flex flex-col shadow-2xl relative border-x border-zinc-200/30 dark:border-zinc-850/50">
-      
-      {/* Scrollable Viewport */}
       <main className="flex-1 overflow-y-auto">
         {renderTabContent()}
       </main>
 
-      {/* Momo Bottom Menu Navigation */}
       <BottomNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -68,7 +64,6 @@ function AppContent() {
         }}
       />
 
-      {/* New Transaction Bottom Sheet/Modal */}
       <TransactionModal
         isOpen={isModalOpen}
         onClose={() => {
@@ -78,12 +73,8 @@ function AppContent() {
         editingTransactionId={editingTransactionId}
       />
 
-      {/* PWA Smart Installation Dialog Banner */}
       <PWAInstallBanner />
-
-      {/* Modern PWA Update Modal */}
       <UpdatePromptModal />
-
     </div>
   );
 }

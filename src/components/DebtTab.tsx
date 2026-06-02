@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Activity, PlusCircle, CheckCircle2, Circle, Trash2, Calculator, Info } from 'lucide-react';
 import type { DebtType, RepaymentMethod } from '../types';
+import { CustomSelect } from './CustomSelect';
 import { formatThousand, parseThousand } from '../utils/format';
 
 export const DebtTab: React.FC = () => {
@@ -228,19 +229,19 @@ export const DebtTab: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Kỳ hạn (Tháng)</label>
-                    <select
+                    <CustomSelect
                       value={termMonths}
-                      onChange={(e) => setTermMonths(e.target.value)}
-                      className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-3 py-2.5 text-xs font-medium font-vietnam focus:outline-none focus:ring-1 focus:ring-[#8fae8d]"
-                    >
-                      <option value="3">3 tháng</option>
-                      <option value="6">6 tháng</option>
-                      <option value="9">9 tháng</option>
-                      <option value="12">12 tháng</option>
-                      <option value="18">18 tháng</option>
-                      <option value="24">24 tháng</option>
-                      <option value="36">36 tháng</option>
-                    </select>
+                      onChange={setTermMonths}
+                      options={[
+                        { value: '3', label: '3 tháng' },
+                        { value: '6', label: '6 tháng' },
+                        { value: '9', label: '9 tháng' },
+                        { value: '12', label: '12 tháng' },
+                        { value: '18', label: '18 tháng' },
+                        { value: '24', label: '24 tháng' },
+                        { value: '36', label: '36 tháng' },
+                      ]}
+                    />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Ngày bắt đầu</label>
@@ -477,19 +478,19 @@ export const DebtTab: React.FC = () => {
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Thời hạn trả nợ (Tháng)</label>
-                  <select
+                  <CustomSelect
                     value={calcTerm}
-                    onChange={(e) => setCalcTerm(e.target.value)}
-                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-medium font-vietnam focus:outline-none focus:ring-1 focus:ring-[#8fae8d]"
-                  >
-                    <option value="3">3 tháng</option>
-                    <option value="6">6 tháng</option>
-                    <option value="9">9 tháng</option>
-                    <option value="12">12 tháng</option>
-                    <option value="18">18 tháng</option>
-                    <option value="24">24 tháng</option>
-                    <option value="36">36 tháng</option>
-                  </select>
+                    onChange={setCalcTerm}
+                    options={[
+                      { value: '3', label: '3 tháng' },
+                      { value: '6', label: '6 tháng' },
+                      { value: '9', label: '9 tháng' },
+                      { value: '12', label: '12 tháng' },
+                      { value: '18', label: '18 tháng' },
+                      { value: '24', label: '24 tháng' },
+                      { value: '36', label: '36 tháng' },
+                    ]}
+                  />
                 </div>
               </div>
 

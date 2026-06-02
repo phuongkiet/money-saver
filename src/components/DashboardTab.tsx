@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconRenderer } from './IconRenderer';
-import { TrendingDown, TrendingUp, Wallet as WalletIcon, Trash2, Pencil, Info } from 'lucide-react';
+import { TrendingDown, TrendingUp, Wallet as WalletIcon, Trash2, Pencil, Info, CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 interface DashboardTabProps {
   onEditTransaction: (id: string) => void;
@@ -45,6 +45,22 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction })
   const totalExpense = transactions
     .filter(t => t.type === 'expense' && t.categoryId !== 'transfer')
     .reduce((sum, t) => sum + t.amount, 0);
+
+  // Smart Daily Budget
+  const today = new Date();
+  const currentMonthId = today.toISOString().substring(0, 7);
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const dayOfMonth = today.getDate();
+  const remainingDays = daysInMonth - dayOfMonth + 1; // Include today
+
+  const monthIncome = transactions
+    .filter(t => t.type === 'income' && t.date.startsWith(currentMonthId))
+    .reduce((sum, t) => sum + t.amount, 0);
+  const monthExpense = transactions
+    .filter(t => t.type === 'expense' && t.categoryId !== 'transfer' && t.date.startsWith(currentMonthId))
+    .reduce((sum, t) => sum + t.amount, 0);
+  const monthBalance = monthIncome - monthExpense;
+  const safeDailyBudget = remainingDays > 0 ? monthBalance / remainingDays : 0;
 
   // Group spending by category
   const expenseTransactions = transactions.filter(t => t.type === 'expense' && t.categoryId !== 'transfer');
@@ -136,6 +152,38 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction })
             </div>
           </div>
         </div>
+
+        {/* Smart Daily Budget Widget */}
+        {monthBalance !== 0 && (
+          <div className={`mt-4 rounded-2xl p-3.5 flex items-center gap-3 ${
+            safeDailyBudget >= 100000
+              ? 'bg-emerald-50/80 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-900/20'
+              : safeDailyBudget >= 0
+                ? 'bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/20'
+                : 'bg-rose-50/80 dark:bg-rose-950/20 border border-rose-200/50 dark:border-rose-900/20'
+          }`}>
+            <div className={`text-xl ${safeDailyBudget >= 100000 ? '🟢' : safeDailyBudget >= 0 ? '🟡' : '🔴'}`}>
+              {safeDailyBudget >= 100000 ? '💰' : safeDailyBudget >= 0 ? '⚠️' : '🚨'}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-bold font-vietnam uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Ngân sách an toàn hôm nay
+              </p>
+              <p className={`text-sm font-extrabold font-vietnam mt-0.5 ${
+                safeDailyBudget >= 100000
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : safeDailyBudget >= 0
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-rose-600 dark:text-rose-400'
+              }`}>
+                {safeDailyBudget >= 0 ? formatVND(safeDailyBudget) : `Bội chi ${formatVND(Math.abs(safeDailyBudget))}`}
+              </p>
+              <p className="text-[9px] text-zinc-400 dark:text-zinc-500 font-vietnam mt-0.5">
+                Còn {remainingDays} ngày trong tháng • Dư tháng: {formatVND(monthBalance)}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="max-w-md mx-auto px-4 mt-4 space-y-6">
@@ -282,6 +330,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction })
           )}
         </section>
 
+        {/* ─── Mini Calendar Section ─────────────────────────────────── */}
+        <MiniCalendarSection transactions={transactions} categories={categories} wallets={wallets} />
+
         {/* Detailed Transactions List */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
@@ -383,5 +434,178 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction })
 
       </div>
     </div>
+  );
+};
+
+// ─── Mini Calendar Component (embedded in Dashboard) ──────────────────────────
+const MiniCalendarSection: React.FC<{
+  transactions: import('../types').Transaction[];
+  categories: import('../types').Category[];
+  wallets: import('../types').Wallet[];
+}> = ({ transactions, categories, wallets }) => {
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+
+  const formatVND = (a: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(a);
+  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' });
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
+    else setViewMonth(m => m - 1);
+    setSelectedDay(null);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
+    else setViewMonth(m => m + 1);
+    setSelectedDay(null);
+  };
+
+  const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const startOffset = (firstDayOfMonth + 6) % 7; // Mon = 0
+
+  const monthPad = (viewMonth + 1).toString().padStart(2, '0');
+  const monthPrefix = `${viewYear}-${monthPad}`;
+  const todayStr = today.toISOString().split('T')[0];
+
+  const txByDay = useMemo(() => {
+    const map: Record<string, { income: number; expense: number }> = {};
+    transactions.forEach(tx => {
+      if (!tx.date.startsWith(monthPrefix)) return;
+      if (!map[tx.date]) map[tx.date] = { income: 0, expense: 0 };
+      if (tx.type === 'income') map[tx.date].income += tx.amount;
+      else if (tx.categoryId !== 'transfer') map[tx.date].expense += tx.amount;
+    });
+    return map;
+  }, [transactions, monthPrefix]);
+
+  const getCategoryInfo = (catId: string) => {
+    if (catId === 'transfer') return { name: 'Chuyển quỹ', icon: 'ArrowLeftRight', color: '#8c8c8c' };
+    if (catId === 'savings') return { name: 'Tiết kiệm', icon: 'PiggyBank', color: '#6f8d6d' };
+    const cat = categories.find(c => c.id === catId);
+    return cat || { name: 'Khác', icon: 'HelpCircle', color: '#a1a1aa' };
+  };
+
+  const selectedTxs = selectedDay
+    ? transactions.filter(t => t.date === selectedDay).sort((a, b) => b.id.localeCompare(a.id))
+    : [];
+
+  const weekDayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+  return (
+    <section className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-100 dark:border-zinc-800 shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
+      {/* Header */}
+      <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-zinc-50 dark:border-zinc-800/60">
+        <h3 className="text-sm font-bold font-vietnam text-zinc-800 dark:text-zinc-100 flex items-center gap-1.5">
+          <CalendarDays size={16} className="text-[#6f8d6d]" />
+          Lịch chi tiêu
+        </h3>
+        <div className="flex items-center gap-1">
+          <button onClick={prevMonth} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400">
+            <ChevronLeft size={15} />
+          </button>
+          <span className="text-xs font-semibold font-vietnam text-zinc-600 dark:text-zinc-300 capitalize min-w-[100px] text-center">
+            {monthLabel}
+          </span>
+          <button onClick={nextMonth} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400">
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-2">
+        {/* Weekday headers */}
+        <div className="grid grid-cols-7">
+          {weekDayLabels.map(d => (
+            <div key={d} className="text-center text-[9px] font-bold text-zinc-400 dark:text-zinc-600 font-vietnam py-1">{d}</div>
+          ))}
+        </div>
+
+        {/* Calendar grid */}
+        <div className="grid grid-cols-7 gap-0.5">
+          {Array.from({ length: startOffset }).map((_, i) => <div key={`e-${i}`} className="aspect-square" />)}
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const day = i + 1;
+            const dayPad = day.toString().padStart(2, '0');
+            const dateStr = `${viewYear}-${monthPad}-${dayPad}`;
+            const dayData = txByDay[dateStr];
+            const isToday = dateStr === todayStr;
+            const isSelected = selectedDay === dateStr;
+
+            return (
+              <button
+                key={day}
+                onClick={() => setSelectedDay(isSelected ? null : dateStr)}
+                className={`aspect-square rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
+                  isSelected
+                    ? 'bg-[#6f8d6d] text-white shadow-md scale-105'
+                    : isToday
+                      ? 'bg-[#8fae8d]/15 text-[#6f8d6d] dark:bg-[#8fae8d]/10 dark:text-[#8fae8d] ring-1 ring-[#8fae8d]/40'
+                      : dayData
+                        ? 'bg-zinc-50 dark:bg-zinc-800/40 hover:bg-zinc-100 dark:hover:bg-zinc-700/40 text-zinc-700 dark:text-zinc-300'
+                        : 'text-zinc-400 dark:text-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/20'
+                }`}
+              >
+                <span className="text-[11px] font-bold font-vietnam leading-none">{day}</span>
+                {dayData && (
+                  <div className="flex gap-0.5">
+                    {dayData.income > 0 && <span className={`w-1 h-1 rounded-full ${isSelected ? 'bg-white/70' : 'bg-emerald-400'}`} />}
+                    {dayData.expense > 0 && <span className={`w-1 h-1 rounded-full ${isSelected ? 'bg-white/70' : 'bg-rose-400'}`} />}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center justify-center gap-4 pt-1">
+          <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400" /><span className="text-[9px] text-zinc-400 font-vietnam">Thu</span></div>
+          <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-400" /><span className="text-[9px] text-zinc-400 font-vietnam">Chi</span></div>
+          <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#8fae8d]" /><span className="text-[9px] text-zinc-400 font-vietnam">Hôm nay</span></div>
+        </div>
+      </div>
+
+      {/* Day detail drawer */}
+      {selectedDay && (
+        <div className="border-t border-zinc-100 dark:border-zinc-800 animate-slide-down">
+          <div className="px-4 py-3 bg-zinc-50/80 dark:bg-zinc-800/30 flex items-center justify-between">
+            <p className="text-xs font-bold font-vietnam text-zinc-800 dark:text-zinc-200">
+              {new Date(selectedDay + 'T00:00:00').toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+            <button onClick={() => setSelectedDay(null)} className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-zinc-400 transition-colors">
+              <X size={13} />
+            </button>
+          </div>
+          {selectedTxs.length === 0 ? (
+            <p className="text-center py-4 text-[11px] text-zinc-400 font-vietnam">Không có giao dịch</p>
+          ) : (
+            <div className="divide-y divide-zinc-50 dark:divide-zinc-800 max-h-48 overflow-y-auto">
+              {selectedTxs.map(tx => {
+                const catInfo = getCategoryInfo(tx.categoryId);
+                const wallet = wallets.find(w => w.id === tx.walletId);
+                return (
+                  <div key={tx.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: `${catInfo.color}15`, color: catInfo.color }}>
+                      <IconRenderer name={catInfo.icon} size={14} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold font-vietnam text-zinc-800 dark:text-zinc-200 truncate">{tx.note}</p>
+                      <p className="text-[9px] text-zinc-400 font-vietnam">{catInfo.name} • {wallet?.name}</p>
+                    </div>
+                    <span className={`text-xs font-bold font-vietnam shrink-0 ${tx.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      {tx.type === 'income' ? '+' : '-'}{formatVND(tx.amount)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 };
