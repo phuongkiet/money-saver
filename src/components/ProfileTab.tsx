@@ -4,6 +4,7 @@ import { IconRenderer } from './IconRenderer';
 import { SyncStatus } from './SyncStatus';
 import { Sun, Moon, Plus, ArrowLeftRight, Download, Upload, Trash2, Smartphone, Building2, Wallet as WalletIcon, Camera, X, FileSpreadsheet, FileText, Cloud, RefreshCw, LogOut } from 'lucide-react';
 import { formatThousand, parseThousand } from '../utils/format';
+import { db } from '../utils/db';
 import * as XLSX from 'xlsx';
 import { CustomSelect } from './CustomSelect';
 
@@ -348,14 +349,29 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
   };
 
   // Export JSON backup
-  const handleExportData = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(localStorage));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `money_saver_backup_${new Date().toISOString().split('T')[0]}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+  const handleExportData = async () => {
+    try {
+      const data = await db.exportAll();
+      // Combine with localStorage (e.g. onboarded flag)
+      const fullData = { ...data };
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('ms_')) {
+          fullData[key] = localStorage.getItem(key);
+        }
+      }
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fullData));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `money_saver_backup_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast('Xuất sao lưu JSON thành công!', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Lỗi khi xuất dữ liệu JSON.', 'error');
+    }
   };
 
   // Import JSON backup
@@ -363,14 +379,22 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
     const fileReader = new FileReader();
     if (e.target.files && e.target.files[0]) {
       fileReader.readAsText(e.target.files[0], "UTF-8");
-      fileReader.onload = (event) => {
+      fileReader.onload = async (event) => {
         try {
           const parsed = JSON.parse(event.target?.result as string);
+          
+          // Separate localStorage and IndexedDB data
+          const idbData: Record<string, any> = {};
           Object.keys(parsed).forEach(key => {
-            if (key.startsWith('ms_')) {
+            if (key.startsWith('ms_') && typeof parsed[key] === 'string') {
               localStorage.setItem(key, parsed[key]);
+            } else {
+              idbData[key] = parsed[key];
             }
           });
+          
+          await db.importAll(idbData);
+          
           showToast('Đã đồng bộ hóa dữ liệu sao lưu thành công! Đang tải lại...', 'success');
           setTimeout(() => {
             window.location.reload();

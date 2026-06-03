@@ -15,6 +15,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Nếu chưa cấu hình key, client vẫn được khởi tạo nhưng các request sẽ fail, 
 // app sẽ catch lỗi và hoạt động ở chế độ Offline/Local mượt mà.
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder-url.supabase.co',
-  supabaseAnonKey || 'placeholder-anon-key'
+  supabaseUrl,
+  supabaseAnonKey
 );
