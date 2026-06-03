@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconRenderer } from './IconRenderer';
 import { SyncStatus } from './SyncStatus';
-import { Sun, Moon, Plus, ArrowLeftRight, Download, Upload, Trash2, Smartphone, Building2, Wallet as WalletIcon, Camera, X, FileSpreadsheet, FileText, Cloud, RefreshCw, LogOut } from 'lucide-react';
+import { Sun, Moon, Plus, ArrowLeftRight, Download, Upload, Trash2, Smartphone, Building2, Wallet as WalletIcon, Camera, X, FileSpreadsheet, FileText, Cloud, RefreshCw, LogOut, Terminal, Eye, EyeOff, Activity, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { formatThousand, parseThousand } from '../utils/format';
 import { db } from '../utils/db';
 import * as XLSX from 'xlsx';
 import { CustomSelect } from './CustomSelect';
+import { supabase } from '../utils/supabaseClient';
 
 const compressAvatar = (file: File, maxSize: number = 150): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -74,6 +75,12 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Supabase Debug states
+  const [showDebug, setShowDebug] = useState(false);
+  const [showRawKeys, setShowRawKeys] = useState(false);
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testError, setTestError] = useState<string | null>(null);
 
   // EmailJS configuration states
   /*
@@ -429,6 +436,28 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
     } catch (err) {
       console.error('Lỗi khi nén ảnh:', err);
       showToast('Nén ảnh đại diện thất bại, vui lòng thử lại.', 'error');
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setTestStatus('testing');
+    setTestError(null);
+    try {
+      // Gọi getSession để check API kết nối
+      const { error } = await supabase.auth.getSession();
+      if (error) {
+        setTestStatus('error');
+        setTestError(error.message);
+        showToast('Kết nối Supabase thất bại: ' + error.message, 'error');
+      } else {
+        setTestStatus('success');
+        showToast('Kết nối Supabase thành công!', 'success');
+      }
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      setTestStatus('error');
+      setTestError(errMsg);
+      showToast('Lỗi khi kiểm tra kết nối: ' + errMsg, 'error');
     }
   };
 
@@ -997,6 +1026,158 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
             </button>
           </div>
         </div>
+      </section>
+
+      {/* 5.5. Supabase Diagnostic Panel (Debug) */}
+      <section className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-3xl p-5 shadow-[0_4px_16px_rgba(0,0,0,0.02)] space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold font-vietnam text-zinc-800 dark:text-zinc-100 flex items-center gap-1.5">
+            <Terminal size={16} className="text-violet-500" />
+            Chẩn đoán Supabase (Debug)
+          </h3>
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="text-[10px] font-bold font-vietnam text-[#6f8d6d] hover:underline cursor-pointer"
+          >
+            {showDebug ? 'Ẩn' : 'Kiểm tra'}
+          </button>
+        </div>
+
+        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-vietnam leading-relaxed">
+          Dành cho nhà phát triển để kiểm tra xem Vercel hoặc môi trường deploy có nhận đúng cấu hình kết nối đám mây hay không.
+        </p>
+
+        {showDebug && (
+          <div className="space-y-4 pt-1 animate-slide-down">
+            <div className="bg-zinc-50 dark:bg-zinc-950/40 rounded-2xl p-3 border border-zinc-100 dark:border-zinc-800 space-y-3">
+              {/* VITE_SUPABASE_URL info */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 font-vietnam uppercase">VITE_SUPABASE_URL</span>
+                  {!!import.meta.env.VITE_SUPABASE_URL ? (
+                    <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-450 text-[8px] font-extrabold rounded-full font-vietnam border border-emerald-200/40 dark:border-emerald-900/30">
+                      ĐÃ NHẬN
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-450 text-[8px] font-extrabold rounded-full font-vietnam border border-rose-200/40 dark:border-rose-900/30">
+                      CHƯA NHẬN
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 bg-white dark:bg-zinc-900 px-2.5 py-1.5 rounded-xl border border-zinc-100 dark:border-zinc-800/80">
+                  <span className="text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-300 break-all select-all">
+                    {showRawKeys ? (import.meta.env.VITE_SUPABASE_URL || '') : ((url) => {
+                      if (!url) return 'Trống';
+                      try {
+                        const parsed = new URL(url);
+                        const host = parsed.hostname;
+                        const parts = host.split('.');
+                        if (parts.length > 0) {
+                          parts[0] = parts[0].substring(0, 4) + '***';
+                        }
+                        return `${parsed.protocol}//${parts.join('.')}`;
+                      } catch (e) {
+                        return url.substring(0, 10) + '...';
+                      }
+                    })(import.meta.env.VITE_SUPABASE_URL || '')}
+                  </span>
+                  <span className="text-[9px] font-semibold text-zinc-400 dark:text-zinc-500 font-vietnam shrink-0">
+                    {(import.meta.env.VITE_SUPABASE_URL || '').length} ký tự
+                  </span>
+                </div>
+              </div>
+
+              {/* VITE_SUPABASE_ANON_KEY info */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 font-vietnam uppercase">VITE_SUPABASE_ANON_KEY</span>
+                  {!!import.meta.env.VITE_SUPABASE_ANON_KEY ? (
+                    <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-450 text-[8px] font-extrabold rounded-full font-vietnam border border-emerald-200/40 dark:border-emerald-900/30">
+                      ĐÃ NHẬN
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-450 text-[8px] font-extrabold rounded-full font-vietnam border border-rose-200/40 dark:border-rose-900/30">
+                      CHƯA NHẬN
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 bg-white dark:bg-zinc-900 px-2.5 py-1.5 rounded-xl border border-zinc-100 dark:border-zinc-800/80">
+                  <span className="text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-350 break-all select-all">
+                    {showRawKeys ? (import.meta.env.VITE_SUPABASE_ANON_KEY || '') : ((key) => {
+                      if (!key) return 'Trống';
+                      if (key.length <= 15) return '***';
+                      return `${key.substring(0, 8)}...${key.substring(key.length - 8)}`;
+                    })(import.meta.env.VITE_SUPABASE_ANON_KEY || '')}
+                  </span>
+                  <span className="text-[9px] font-semibold text-zinc-400 dark:text-zinc-500 font-vietnam shrink-0">
+                    {(import.meta.env.VITE_SUPABASE_ANON_KEY || '').length} ký tự
+                  </span>
+                </div>
+              </div>
+
+              {/* View/Hide raw key action */}
+              { (!!import.meta.env.VITE_SUPABASE_URL || !!import.meta.env.VITE_SUPABASE_ANON_KEY) && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setShowRawKeys(!showRawKeys)}
+                    className="flex items-center gap-1 text-[9px] font-bold text-[#6f8d6d] hover:underline cursor-pointer font-vietnam"
+                  >
+                    {showRawKeys ? (
+                      <>
+                        <EyeOff size={11} />
+                        Ẩn giá trị thật
+                      </>
+                    ) : (
+                      <>
+                        <Eye size={11} />
+                        Hiển thị giá trị thật
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Live Connection Test Button & Status */}
+            <div className="space-y-2.5">
+              <button
+                onClick={handleTestConnection}
+                disabled={testStatus === 'testing'}
+                className="w-full py-3 bg-violet-600 hover:bg-violet-750 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-2xl text-xs transition-all duration-200 cursor-pointer font-vietnam flex items-center justify-center gap-2 shadow-md shadow-violet-500/10"
+              >
+                <Activity size={14} className={testStatus === 'testing' ? 'animate-spin' : ''} />
+                Kiểm tra kết nối thực tế
+              </button>
+
+              {testStatus === 'success' && (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-900/30 rounded-2xl flex gap-2.5 items-start text-xs font-semibold text-emerald-700 dark:text-emerald-400 font-vietnam animate-slide-down">
+                  <CheckCircle2 size={16} className="shrink-0 text-emerald-500 mt-0.5" />
+                  <div>
+                    <p className="font-bold">Kết nối thành công!</p>
+                    <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 font-medium mt-0.5 leading-relaxed">
+                      Supabase client đã được khởi tạo và phản hồi chính xác. Các tác vụ đồng bộ đám mây sẽ hoạt động mượt mà.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {testStatus === 'error' && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-200/50 dark:border-rose-900/30 rounded-2xl flex gap-2.5 items-start text-xs font-semibold text-rose-700 dark:text-rose-400 font-vietnam animate-slide-down">
+                  <AlertTriangle size={16} className="shrink-0 text-rose-500 mt-0.5" />
+                  <div>
+                    <p className="font-bold">Kết nối thất bại</p>
+                    <p className="text-[10px] font-mono text-rose-600/90 dark:text-rose-400/95 font-medium mt-1 bg-white/50 dark:bg-black/30 p-2 rounded-lg border border-rose-100 dark:border-rose-900/20 break-all select-text whitespace-pre-wrap">
+                      {testError}
+                    </p>
+                    <p className="text-[9px] text-rose-500/70 dark:text-rose-450/70 font-medium mt-1.5 leading-relaxed">
+                      Hãy kiểm tra lại xem IP có bị chặn, hoặc xem các biến môi trường cấu hình trên Vercel có bị thừa khoảng trắng, gõ sai tên không.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* 6. Simulated Mail Envelope Dialog Preview Modal */}

@@ -10,11 +10,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-
 // Khởi tạo Supabase client.
 // Nếu chưa cấu hình key, client vẫn được khởi tạo nhưng các request sẽ fail, 
 // app sẽ catch lỗi và hoạt động ở chế độ Offline/Local mượt mà.
 export const supabase = createClient(
-  supabaseUrl,
-  supabaseAnonKey
+  supabaseUrl || '',
+  supabaseAnonKey || ''
 );
