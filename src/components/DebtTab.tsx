@@ -1,13 +1,20 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Activity, PlusCircle, CheckCircle2, Circle, Trash2, Calculator, Info } from 'lucide-react';
+import { Activity, PlusCircle, CheckCircle2, Circle, Trash2, Calculator, Info, Pencil, X } from 'lucide-react';
 import type { DebtType, RepaymentMethod } from '../types';
 import { CustomSelect } from './CustomSelect';
 import { formatThousand, parseThousand } from '../utils/format';
 
 export const DebtTab: React.FC = () => {
-  const { debts, addDebt, toggleDebtStatus, deleteDebt, showToast, confirm, categories } = useApp();
+  const { debts, addDebt, updateDebt, toggleDebtStatus, deleteDebt, showToast, confirm, categories } = useApp();
   const [activeSubTab, setActiveSubTab] = useState<'list' | 'calculator'>('list');
+
+  const categoryOptions = React.useMemo(() => {
+    return categories.map(c => ({
+      value: c.id,
+      label: `${c.type === 'income' ? '📈' : '📉'} ${c.name}`
+    }));
+  }, [categories]);
 
   // Form states for adding new debt
   const [showAddForm, setShowAddForm] = useState(false);
@@ -21,15 +28,71 @@ export const DebtTab: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [linkedCategoryId, setLinkedCategoryId] = useState('');
 
+  // Form states for editing debt
+  const [editingDebtId, setEditingDebtId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editInterestRate, setEditInterestRate] = useState('0');
+  const [editTermMonths, setEditTermMonths] = useState('12');
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editDebtType, setEditDebtType] = useState<DebtType>('to_pay');
+  const [editRepaymentMethod, setEditRepaymentMethod] = useState<RepaymentMethod>('emi');
+  const [editNotes, setEditNotes] = useState('');
+  const [editLinkedCategoryId, setEditLinkedCategoryId] = useState('');
+
   // Interactive Calculator states
   const [calcAmount, setCalcAmount] = useState('50,000,000');
-  const [calcInterest, setCalcInterest] = useState('10');
+  const [calcInterest, setCalcInterest] = useState('1.0');
   const [calcTerm, setCalcTerm] = useState('12');
   const [calcMethod, setCalcMethod] = useState<RepaymentMethod>('emi');
 
   // Helper: Format currency in VNĐ
   const formatVND = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+  };
+
+  const handleStartEdit = (d: any) => {
+    setEditingDebtId(d.id);
+    setEditName(d.name);
+    setEditAmount(formatThousand(d.amount.toString()));
+    setEditInterestRate(d.interestRate.toString());
+    setEditTermMonths(d.termMonths.toString());
+    setEditStartDate(d.startDate);
+    setEditDebtType(d.type);
+    setEditRepaymentMethod(d.repaymentMethod);
+    setEditNotes(d.notes || '');
+    setEditLinkedCategoryId(d.linkedCategoryId || '');
+    setShowAddForm(false);
+  };
+
+  const handleSaveEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDebtId) return;
+
+    const parsedAmount = parseThousand(editAmount);
+    const parsedRate = parseFloat(editInterestRate);
+    const parsedTerm = parseInt(editTermMonths);
+
+    if (!editName.trim()) { showToast('Tên khoản nợ không được để trống.', 'error'); return; }
+    if (isNaN(parsedAmount) || parsedAmount <= 0) { showToast('Số tiền phải lớn hơn 0.', 'error'); return; }
+    if (isNaN(parsedRate) || parsedRate < 0) { showToast('Lãi suất không hợp lệ.', 'error'); return; }
+    if (isNaN(parsedTerm) || parsedTerm <= 0) { showToast('Kỳ hạn phải lớn hơn 0 tháng.', 'error'); return; }
+
+    updateDebt(
+      editingDebtId,
+      editName.trim(),
+      parsedAmount,
+      parsedRate,
+      parsedTerm,
+      editStartDate,
+      editDebtType,
+      editRepaymentMethod,
+      editNotes.trim(),
+      editLinkedCategoryId || undefined
+    );
+
+    setEditingDebtId(null);
+    showToast('Cập nhật khoản nợ thành công!', 'success');
   };
 
   const handleAddDebtSubmit = (e: React.FormEvent) => {
@@ -69,8 +132,8 @@ export const DebtTab: React.FC = () => {
   };
 
   // Repayment Calculation Engine (Used both for active debt view & standalone calculator)
-  const calculateRepayments = (p: number, annualRate: number, months: number, method: RepaymentMethod) => {
-    const monthlyRate = (annualRate / 100) / 12;
+  const calculateRepayments = (p: number, rate: number, months: number, method: RepaymentMethod) => {
+    const monthlyRate = rate / 100;
     const schedule = [];
     let remainingPrincipal = p;
     let totalInterest = 0;
@@ -182,7 +245,7 @@ export const DebtTab: React.FC = () => {
 
           {/* Collapsible Add Debt Form */}
           {showAddForm && (
-            <form onSubmit={handleAddDebtSubmit} className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-100 dark:border-zinc-800 shadow-md space-y-4 animate-slide-down">
+            <form onSubmit={handleAddDebtSubmit} className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-100 dark:border-zinc-800 shadow-md space-y-4 animate-slide-down relative z-20">
               <h3 className="text-xs font-bold font-vietnam text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">Nhập khoản nợ mới</h3>
               
               <div className="space-y-3">
@@ -214,7 +277,7 @@ export const DebtTab: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Lãi suất (% / năm)</label>
+                    <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Lãi suất (% / tháng)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -231,18 +294,14 @@ export const DebtTab: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Kỳ hạn (Tháng)</label>
-                    <CustomSelect
+                    <input
+                      type="number"
+                      min="1"
+                      required
                       value={termMonths}
-                      onChange={setTermMonths}
-                      options={[
-                        { value: '3', label: '3 tháng' },
-                        { value: '6', label: '6 tháng' },
-                        { value: '9', label: '9 tháng' },
-                        { value: '12', label: '12 tháng' },
-                        { value: '18', label: '18 tháng' },
-                        { value: '24', label: '24 tháng' },
-                        { value: '36', label: '36 tháng' },
-                      ]}
+                      onChange={(e) => setTermMonths(e.target.value)}
+                      placeholder="Nhập số tháng"
+                      className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-bold font-vietnam focus:outline-none focus:ring-1 focus:ring-[#8fae8d]"
                     />
                   </div>
                   <div className="space-y-1">
@@ -311,18 +370,12 @@ export const DebtTab: React.FC = () => {
                 {/* Linked Category Selection */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Liên kết danh mục chi tiêu/thu nhập</label>
-                  <select
+                  <CustomSelect
                     value={linkedCategoryId}
-                    onChange={(e) => setLinkedCategoryId(e.target.value)}
-                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-medium font-vietnam focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200"
-                  >
-                    <option value="">-- Không liên kết --</option>
-                    {categories.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.type === 'income' ? '📈' : '📉'} {c.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setLinkedCategoryId}
+                    options={categoryOptions}
+                    placeholder="-- Không liên kết --"
+                  />
                   <p className="text-[9px] text-zinc-400 dark:text-zinc-550 italic mt-0.5 leading-normal">
                     Khi gạch nợ (tất toán), danh mục được liên kết này sẽ tự động bị xóa.
                   </p>
@@ -365,6 +418,133 @@ export const DebtTab: React.FC = () => {
                 const isPaid = d.status === 'paid';
                 const scheduleData = calculateRepayments(d.amount, d.interestRate, d.termMonths, d.repaymentMethod);
                 const linkedCat = categories.find(c => c.id === d.linkedCategoryId);
+
+                if (editingDebtId === d.id) {
+                  return (
+                    <form key={d.id} onSubmit={handleSaveEditSubmit} className="bg-white dark:bg-zinc-900 border border-[#8fae8d] rounded-3xl p-5 shadow-lg space-y-4 animate-scale-up relative z-30">
+                      <div className="flex items-center justify-between pb-1">
+                        <h3 className="text-xs font-bold font-vietnam text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">Chỉnh sửa khoản nợ</h3>
+                        <button type="button" onClick={() => setEditingDebtId(null)} className="p-1 text-zinc-400 hover:text-zinc-655 rounded-lg cursor-pointer"><X size={16} /></button>
+                      </div>
+
+                      <div className="space-y-3.5">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Tên khoản nợ / Đối tác</label>
+                          <input
+                            type="text"
+                            required
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            placeholder="Ví dụ: Vay mua xe, Cho Nam vay..."
+                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Số tiền (VNĐ)</label>
+                            <input
+                              type="text"
+                              required
+                              value={editAmount}
+                              onChange={(e) => setEditAmount(formatThousand(e.target.value))}
+                              placeholder="0"
+                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Lãi suất (% / tháng)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              required
+                              value={editInterestRate}
+                              onChange={(e) => setEditInterestRate(e.target.value)}
+                              placeholder="0"
+                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Kỳ hạn (Tháng)</label>
+                            <input
+                              type="number"
+                              min="1"
+                              required
+                              value={editTermMonths}
+                              onChange={(e) => setEditTermMonths(e.target.value)}
+                              placeholder="Kỳ hạn tháng"
+                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Ngày bắt đầu</label>
+                            <input
+                              type="date"
+                              required
+                              value={editStartDate}
+                              onChange={(e) => setEditStartDate(e.target.value)}
+                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Loại giao dịch</label>
+                            <select
+                              value={editDebtType}
+                              onChange={(e) => setEditDebtType(e.target.value as DebtType)}
+                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200"
+                            >
+                              <option value="to_pay">Nợ phải trả (-)</option>
+                              <option value="to_collect">Cho vay / Thu hồi (+)</option>
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Phương thức trả</label>
+                            <select
+                              value={editRepaymentMethod}
+                              onChange={(e) => setEditRepaymentMethod(e.target.value as RepaymentMethod)}
+                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200"
+                            >
+                              <option value="emi">Trả đều hàng tháng (EMI)</option>
+                              <option value="reducing_balance">Dư nợ giảm dần</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Liên kết danh mục</label>
+                          <CustomSelect
+                            value={editLinkedCategoryId}
+                            onChange={setEditLinkedCategoryId}
+                            options={categoryOptions}
+                            placeholder="-- Không liên kết --"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Ghi chú thêm</label>
+                          <input
+                            type="text"
+                            value={editNotes}
+                            onChange={(e) => setEditNotes(e.target.value)}
+                            placeholder="Địa chỉ, thông tin liên hệ..."
+                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200"
+                          />
+                        </div>
+
+                        <div className="flex gap-2 pt-1">
+                          <button type="button" onClick={() => setEditingDebtId(null)} className="flex-1 py-2.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-850 text-zinc-550 dark:text-zinc-400 text-xs font-bold rounded-xl transition-all cursor-pointer">Hủy bỏ</button>
+                          <button type="submit" className="flex-1 py-2.5 bg-[#6f8d6d] hover:bg-[#5b755a] text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer">Lưu thay đổi</button>
+                        </div>
+                      </div>
+                    </form>
+                  );
+                }
 
                 return (
                   <div
@@ -410,26 +590,35 @@ export const DebtTab: React.FC = () => {
                           </div>
                         </div>
                       </div>
-
-                      {/* Delete */}
-                      <button
-                        onClick={async () => {
-                          const confirmDelete = await confirm(
-                            'Xác nhận xóa nợ',
-                            `Bạn có chắc chắn muốn xóa khoản nợ "${d.name}" này?`
-                          );
-                          if (confirmDelete) {
-                            deleteDebt(d.id);
-                            showToast(`Đã xóa khoản nợ "${d.name}" thành công!`, 'success');
-                          }
-                        }}
-                        className="p-1 text-zinc-300 hover:text-rose-500 active:scale-90 transition-colors cursor-pointer"
-                        title="Xóa khoản nợ"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+ 
+                      {/* Actions: Edit & Delete */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => handleStartEdit(d)}
+                          className="p-1 text-zinc-300 hover:text-[#6f8d6d] dark:hover:text-[#8fae8d] active:scale-90 transition-colors cursor-pointer"
+                          title="Sửa khoản nợ"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const confirmDelete = await confirm(
+                              'Xác nhận xóa nợ',
+                              `Bạn có chắc chắn muốn xóa khoản nợ "${d.name}" này?`
+                            );
+                            if (confirmDelete) {
+                              deleteDebt(d.id);
+                              showToast(`Đã xóa khoản nợ "${d.name}" thành công!`, 'success');
+                            }
+                          }}
+                          className="p-1 text-zinc-300 hover:text-rose-500 active:scale-90 transition-colors cursor-pointer"
+                          title="Xóa khoản nợ"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
-
+ 
                     {/* Details content */}
                     <div className="grid grid-cols-2 gap-4 mt-4 pt-3.5 border-t border-zinc-50 dark:border-zinc-800/60 text-xs font-vietnam text-zinc-500">
                       <div>
@@ -443,7 +632,7 @@ export const DebtTab: React.FC = () => {
                       <div>
                         <span className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase block font-semibold">Thời hạn & Lãi suất</span>
                         <span className="font-semibold text-zinc-600 dark:text-zinc-400 mt-0.5 block">
-                          {d.termMonths}T • Lãi {d.interestRate}%/năm
+                          {d.termMonths}T • Lãi {d.interestRate}%/tháng
                         </span>
                       </div>
                       <div>
@@ -497,7 +686,7 @@ export const DebtTab: React.FC = () => {
               {/* Lãi suất & Kỳ hạn */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Lãi suất (% / năm)</label>
+                  <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Lãi suất (% / tháng)</label>
                   <input
                     type="number"
                     step="0.1"
@@ -508,18 +697,13 @@ export const DebtTab: React.FC = () => {
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Thời hạn trả nợ (Tháng)</label>
-                  <CustomSelect
+                  <input
+                    type="number"
+                    min="1"
                     value={calcTerm}
-                    onChange={setCalcTerm}
-                    options={[
-                      { value: '3', label: '3 tháng' },
-                      { value: '6', label: '6 tháng' },
-                      { value: '9', label: '9 tháng' },
-                      { value: '12', label: '12 tháng' },
-                      { value: '18', label: '18 tháng' },
-                      { value: '24', label: '24 tháng' },
-                      { value: '36', label: '36 tháng' },
-                    ]}
+                    onChange={(e) => setCalcTerm(e.target.value)}
+                    placeholder="Nhập số tháng"
+                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-bold font-vietnam focus:outline-none focus:ring-1 focus:ring-[#8fae8d]"
                   />
                 </div>
               </div>

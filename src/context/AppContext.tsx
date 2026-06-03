@@ -69,6 +69,7 @@ interface AppContextType {
   deleteCategory: (id: string) => void;
   // Debts
   addDebt: (name: string, amount: number, interestRate: number, termMonths: number, startDate: string, type: DebtType, repaymentMethod: RepaymentMethod, notes?: string, linkedCategoryId?: string) => void;
+  updateDebt: (id: string, name: string, amount: number, interestRate: number, termMonths: number, startDate: string, type: DebtType, repaymentMethod: RepaymentMethod, notes?: string, linkedCategoryId?: string) => void;
   toggleDebtStatus: (id: string) => void;
   deleteDebt: (id: string) => void;
   // Recurring Transactions
@@ -1207,6 +1208,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDebts(prev => [newDebt, ...prev]);
   };
 
+  const updateDebt = (
+    id: string, name: string, amount: number, interestRate: number, termMonths: number,
+    startDate: string, type: DebtType, repaymentMethod: RepaymentMethod, notes?: string,
+    linkedCategoryId?: string
+  ) => {
+    if (!name.trim()) { showToast('Tên khoản nợ không được để trống.', 'error'); return; }
+    if (!amount || amount <= 0) { showToast('Số tiền phải lớn hơn 0.', 'error'); return; }
+    if (interestRate < 0) { showToast('Lãi suất không được âm.', 'error'); return; }
+    if (!termMonths || termMonths <= 0) { showToast('Kỳ hạn phải lớn hơn 0 tháng.', 'error'); return; }
+    if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) { showToast('Ngày bắt đầu không hợp lệ.', 'error'); return; }
+
+    setDebts(prev => prev.map(d => d.id === id ? {
+      ...d,
+      name: name.trim(),
+      amount,
+      interestRate,
+      termMonths,
+      startDate,
+      type,
+      repaymentMethod,
+      notes: notes?.trim(),
+      linkedCategoryId: linkedCategoryId || undefined,
+      updatedAt: Date.now(),
+      pendingSync: true
+    } : d));
+  };
+
   const toggleDebtStatus = (id: string) => {
     const debt = debts.find(d => d.id === id);
     if (!debt) { showToast('Khoản nợ không tồn tại.', 'error'); return; }
@@ -1645,7 +1673,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addTransaction, updateTransaction, deleteTransaction,
       addWallet, updateWalletBalance, transferFunds, deleteWallet,
       addCategory, updateCategory, updateCategoryBudget, updateCategoryColor, deleteCategory,
-      addDebt, toggleDebtStatus, deleteDebt,
+      addDebt, updateDebt, toggleDebtStatus, deleteDebt,
       addRecurringTransaction, updateRecurringTransaction, deleteRecurringTransaction,
       pauseRecurringTransaction, resumeRecurringTransaction,
       addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, depositToSavingsGoal, withdrawFromSavingsGoal,
