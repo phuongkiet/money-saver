@@ -16,6 +16,8 @@ dist
 dist-ssr
 *.local
 /key
+/v1.0
+/v1.5
 
 # Editor directories and files
 .vscode/*

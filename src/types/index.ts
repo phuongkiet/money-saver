@@ -11,6 +11,7 @@ export interface Transaction extends Syncable {
   amount: number;
   type: TransactionType;
   categoryId: string;
+  categoryName: string; // Tên category lưu tại thời điểm tạo transaction (snapshot)
   walletId: string;
   date: string;
   note: string;
@@ -50,6 +51,7 @@ export interface Debt extends Syncable {
   status: 'active' | 'paid';
   repaymentMethod: RepaymentMethod;
   notes?: string;
+  linkedCategoryId?: string; // Link đến category nợ/vay liên kết
 }
 
 // --- Recurring Transactions ---

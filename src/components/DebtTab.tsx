@@ -6,7 +6,7 @@ import { CustomSelect } from './CustomSelect';
 import { formatThousand, parseThousand } from '../utils/format';
 
 export const DebtTab: React.FC = () => {
-  const { debts, addDebt, toggleDebtStatus, deleteDebt, showToast, confirm } = useApp();
+  const { debts, addDebt, toggleDebtStatus, deleteDebt, showToast, confirm, categories } = useApp();
   const [activeSubTab, setActiveSubTab] = useState<'list' | 'calculator'>('list');
 
   // Form states for adding new debt
@@ -19,6 +19,7 @@ export const DebtTab: React.FC = () => {
   const [debtType, setDebtType] = useState<DebtType>('to_pay');
   const [repaymentMethod, setRepaymentMethod] = useState<RepaymentMethod>('emi');
   const [notes, setNotes] = useState('');
+  const [linkedCategoryId, setLinkedCategoryId] = useState('');
 
   // Interactive Calculator states
   const [calcAmount, setCalcAmount] = useState('50,000,000');
@@ -54,7 +55,7 @@ export const DebtTab: React.FC = () => {
       return;
     }
 
-    addDebt(name.trim(), parsedAmount, parsedRate, parsedTerm, startDate, debtType, repaymentMethod, notes.trim());
+    addDebt(name.trim(), parsedAmount, parsedRate, parsedTerm, startDate, debtType, repaymentMethod, notes.trim(), linkedCategoryId || undefined);
     
     // Reset Form
     setName('');
@@ -62,6 +63,7 @@ export const DebtTab: React.FC = () => {
     setInterestRate('0');
     setStartDate(new Date().toISOString().split('T')[0]);
     setNotes('');
+    setLinkedCategoryId('');
     setShowAddForm(false);
     showToast('Lưu khoản nợ mới thành công!', 'success');
   };
@@ -306,6 +308,26 @@ export const DebtTab: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Linked Category Selection */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Liên kết danh mục chi tiêu/thu nhập</label>
+                  <select
+                    value={linkedCategoryId}
+                    onChange={(e) => setLinkedCategoryId(e.target.value)}
+                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-xl px-3 py-2 text-xs font-medium font-vietnam focus:outline-none focus:ring-1 focus:ring-[#8fae8d] dark:text-zinc-200"
+                  >
+                    <option value="">-- Không liên kết --</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.type === 'income' ? '📈' : '📉'} {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[9px] text-zinc-400 dark:text-zinc-550 italic mt-0.5 leading-normal">
+                    Khi gạch nợ (tất toán), danh mục được liên kết này sẽ tự động bị xóa.
+                  </p>
+                </div>
+
                 {/* Notes */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase">Ghi chú thêm</label>
@@ -342,6 +364,7 @@ export const DebtTab: React.FC = () => {
                 const isPay = d.type === 'to_pay';
                 const isPaid = d.status === 'paid';
                 const scheduleData = calculateRepayments(d.amount, d.interestRate, d.termMonths, d.repaymentMethod);
+                const linkedCat = categories.find(c => c.id === d.linkedCategoryId);
 
                 return (
                   <div
@@ -371,13 +394,20 @@ export const DebtTab: React.FC = () => {
                           <h4 className={`text-xs font-bold font-vietnam text-zinc-800 dark:text-zinc-200 ${isPaid ? 'line-through text-zinc-400 dark:text-zinc-600' : ''}`}>
                             {d.name}
                           </h4>
-                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-vietnam uppercase font-bold mt-1 inline-block ${
-                            isPay 
-                              ? 'bg-[#8fae8d]/10 text-[#5b755a]' 
-                              : 'bg-emerald-100 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400'
-                          }`}>
-                            {isPay ? 'Nợ phải trả' : 'Cần thu hồi'}
-                          </span>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-vietnam uppercase font-bold inline-block ${
+                              isPay 
+                                ? 'bg-[#8fae8d]/10 text-[#5b755a]' 
+                                : 'bg-emerald-100 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400'
+                            }`}>
+                              {isPay ? 'Nợ phải trả' : 'Cần thu hồi'}
+                            </span>
+                            {linkedCat && (
+                              <span className="text-[9px] px-2 py-0.5 rounded-full font-vietnam font-bold inline-block bg-[#6f8d6d]/10 text-[#6f8d6d] dark:bg-zinc-800 dark:text-zinc-400">
+                                🔗 {linkedCat.name}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 

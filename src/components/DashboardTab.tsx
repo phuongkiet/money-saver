@@ -19,7 +19,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction, o
   };
 
   // Helper: Get Category Info
-  const getCategoryInfo = (catId: string) => {
+  const getCategoryInfo = (catId: string, tx?: any) => {
     if (catId === 'transfer') {
       return { name: 'Chuyển quỹ', icon: 'ArrowLeftRight', color: '#8c8c8c' };
     }
@@ -27,7 +27,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction, o
       return { name: 'Thu nhập', icon: 'TrendingUp', color: '#10b981' };
     }
     const cat = categories.find(c => c.id === catId);
-    return cat || { name: 'Khác', icon: 'HelpCircle', color: '#a1a1aa' };
+    if (cat) return cat;
+    if (tx && tx.categoryName) {
+      return { name: tx.categoryName, icon: 'FolderHeart', color: '#a1a1aa' };
+    }
+    return { name: 'Khác', icon: 'HelpCircle', color: '#a1a1aa' };
   };
 
   // Helper: Get Wallet Info
@@ -67,15 +71,27 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction, o
   // Group spending by category
   const expenseTransactions = transactions.filter(t => t.type === 'expense' && t.categoryId !== 'transfer');
   
-  const categorySpending = categories.map(cat => {
-    const amount = expenseTransactions
-      .filter(t => t.categoryId === cat.id)
-      .reduce((sum, t) => sum + t.amount, 0);
-    return {
-      ...cat,
-      amount
-    };
-  }).filter(c => c.amount > 0);
+  const categorySpending = useMemo(() => {
+    const spendingMap: { [id: string]: { id: string; name: string; color: string; icon: string; amount: number; budget: number; type: string } } = {};
+
+    expenseTransactions.forEach(t => {
+      const catId = t.categoryId;
+      const liveCat = categories.find(c => c.id === catId);
+      const id = catId;
+      const name = liveCat ? liveCat.name : (t.categoryName || 'Danh mục đã xóa');
+      const color = liveCat ? liveCat.color : '#a1a1aa';
+      const icon = liveCat ? liveCat.icon : 'FolderHeart';
+      const budget = liveCat ? liveCat.budget : 0;
+      const type = 'expense';
+
+      if (!spendingMap[id]) {
+        spendingMap[id] = { id, name, color, icon, amount: 0, budget, type };
+      }
+      spendingMap[id].amount += t.amount;
+    });
+
+    return Object.values(spendingMap).filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount);
+  }, [categories, expenseTransactions]);
 
   const totalSpendingFiltered = categorySpending.reduce((sum, c) => sum + c.amount, 0);
 
@@ -336,7 +352,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction, o
                 {activeCategoryFilter && (
                   <button
                     onClick={() => setActiveCategoryFilter(null)}
-                    className="w-full text-center py-1 text-[11px] font-semibold text-[#6f8d6d] hover:underline"
+                    className="w-full text-center py-2 text-[11px] font-bold font-vietnam text-[#6f8d6d] hover:text-[#5b755a] dark:text-[#8fae8d] dark:hover:text-[#6f8d6d] transition-colors"
                   >
                     Bỏ lọc biểu đồ
                   </button>
@@ -376,7 +392,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({ onEditTransaction, o
                   {/* Date's Transactions */}
                   <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 divide-y divide-zinc-50 dark:divide-zinc-800 shadow-[0_4px_16px_rgba(0,0,0,0.01)] overflow-hidden">
                     {groupedTransactions[dateStr].map(tx => {
-                      const catInfo = getCategoryInfo(tx.categoryId);
+                      const catInfo = getCategoryInfo(tx.categoryId, tx);
                       const wInfo = getWalletInfo(tx.walletId);
                       
                       return (
@@ -497,11 +513,13 @@ const MiniCalendarSection: React.FC<{
     return map;
   }, [transactions, monthPrefix]);
 
-  const getCategoryInfo = (catId: string) => {
+  const getCategoryInfo = (catId: string, tx?: any) => {
     if (catId === 'transfer') return { name: 'Chuyển quỹ', icon: 'ArrowLeftRight', color: '#8c8c8c' };
     if (catId === 'savings') return { name: 'Tiết kiệm', icon: 'PiggyBank', color: '#6f8d6d' };
     const cat = categories.find(c => c.id === catId);
-    return cat || { name: 'Khác', icon: 'HelpCircle', color: '#a1a1aa' };
+    if (cat) return cat;
+    if (tx && tx.categoryName) return { name: tx.categoryName, icon: 'FolderHeart', color: '#a1a1aa' };
+    return { name: 'Khác', icon: 'HelpCircle', color: '#a1a1aa' };
   };
 
   const selectedTxs = selectedDay
@@ -600,7 +618,7 @@ const MiniCalendarSection: React.FC<{
           ) : (
             <div className="divide-y divide-zinc-50 dark:divide-zinc-800 max-h-48 overflow-y-auto">
               {selectedTxs.map(tx => {
-                const catInfo = getCategoryInfo(tx.categoryId);
+                const catInfo = getCategoryInfo(tx.categoryId, tx);
                 const wallet = wallets.find(w => w.id === tx.walletId);
                 return (
                   <div key={tx.id} className="flex items-center gap-3 px-4 py-2.5">

@@ -42,6 +42,7 @@ export const mapTransactionToDb = (tx: Transaction, userId: string) => ({
   amount: tx.amount,
   type: tx.type,
   category_id: tx.categoryId,
+  category_name: tx.categoryName || '',
   wallet_id: tx.walletId,
   date: tx.date,
   note: tx.note,
@@ -55,6 +56,7 @@ export const mapTransactionFromDb = (row: any): Transaction => ({
   amount: Number(row.amount),
   type: row.type,
   categoryId: row.category_id,
+  categoryName: row.category_name || '',
   walletId: row.wallet_id,
   date: row.date,
   note: row.note,
@@ -122,6 +124,7 @@ export const mapDebtToDb = (d: Debt, userId: string) => ({
   status: d.status,
   repayment_method: d.repaymentMethod,
   notes: d.notes || null,
+  linked_category_id: d.linkedCategoryId || null,
   updated_at: d.updatedAt || Date.now(),
   is_deleted: d.isDeleted || false
 });
@@ -137,6 +140,7 @@ export const mapDebtFromDb = (row: any): Debt => ({
   status: row.status,
   repaymentMethod: row.repayment_method,
   notes: row.notes || undefined,
+  linkedCategoryId: row.linked_category_id || undefined,
   updatedAt: Number(row.updated_at),
   isDeleted: row.is_deleted
 });

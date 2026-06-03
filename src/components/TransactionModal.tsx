@@ -19,6 +19,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
   const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [note, setNote] = useState<string>('');
 
+  const getFilteredCategories = (t: 'expense' | 'income') => {
+    return categories.filter(c => c.type === t || (t === 'expense' && !c.type));
+  };
+
   // Set form values when opening or changing edit transaction
   React.useEffect(() => {
     if (isOpen) {
@@ -41,7 +45,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       setDate(new Date().toISOString().split('T')[0]);
       setType('expense');
       
-      const defaultFiltered = categories.filter(c => c.type === 'expense' || !c.type);
+      const defaultFiltered = getFilteredCategories('expense');
       if (defaultFiltered.length > 0) {
         setCategoryId(defaultFiltered[0].id);
       }
@@ -89,6 +93,45 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
     onClose();
   };
 
+  const renderCategoryPicker = () => {
+    const filtered = getFilteredCategories(type);
+
+    if (filtered.length === 0) {
+      return (
+        <div className="text-center py-6 bg-zinc-50/50 dark:bg-zinc-950/20 p-3 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+          <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 font-vietnam">Chưa có danh mục nào.</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-4 gap-2 max-h-[32vh] overflow-y-auto pr-1 bg-zinc-50/50 dark:bg-zinc-950/20 p-3 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+        {filtered.map(cat => (
+          <button
+            type="button"
+            key={cat.id}
+            onClick={() => setCategoryId(cat.id)}
+            className={`p-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all text-center cursor-pointer ${
+              categoryId === cat.id
+                ? 'bg-[#8fae8d]/5 border-[#8fae8d] ring-1 ring-[#8fae8d]'
+                : 'border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 bg-white dark:bg-zinc-900'
+            }`}
+          >
+            <span
+              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs"
+              style={{ backgroundColor: `${cat.color}15`, color: cat.color }}
+            >
+              <IconRenderer name={cat.icon} size={14} />
+            </span>
+            <span className="text-[9px] font-bold font-vietnam text-zinc-700 dark:text-zinc-300 truncate w-full">
+              {cat.name}
+            </span>
+          </button>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
       {/* Backdrop */}
@@ -107,7 +150,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
           </h3>
           <button
             onClick={onClose}
-            className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
+            className="p-2 text-zinc-400 hover:text-zinc-650 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
             aria-label="Đóng"
           >
             <X size={18} />
@@ -123,7 +166,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
               type="button"
               onClick={() => {
                 setType('expense');
-                const expCats = categories.filter(c => c.type === 'expense' || !c.type);
+                const expCats = getFilteredCategories('expense');
                 if (expCats.length > 0) setCategoryId(expCats[0].id);
               }}
               className={`flex-1 py-2 text-xs font-bold font-vietnam rounded-xl transition-all ${
@@ -138,7 +181,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
               type="button"
               onClick={() => {
                 setType('income');
-                const incCats = categories.filter(c => c.type === 'income');
+                const incCats = getFilteredCategories('income');
                 if (incCats.length > 0) setCategoryId(incCats[0].id);
               }}
               className={`flex-1 py-2 text-xs font-bold font-vietnam rounded-xl transition-all ${
@@ -153,7 +196,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
 
           {/* Amount Input */}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block">
+            <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block block">
               Số tiền giao dịch (VNĐ)
             </label>
             <div className="relative">
@@ -211,30 +254,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
               <FolderHeart size={12} />
               {type === 'expense' ? 'Chọn danh mục chi tiêu' : 'Chọn danh mục thu nhập'}
             </label>
-            <div className="grid grid-cols-5 gap-1.5">
-              {categories.filter(c => c.type === type || (!c.type && type === 'expense')).map(cat => (
-                <button
-                  type="button"
-                  key={cat.id}
-                  onClick={() => setCategoryId(cat.id)}
-                  className={`p-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all text-center ${
-                    categoryId === cat.id
-                      ? 'bg-[#8fae8d]/5 border-[#8fae8d] ring-1 ring-[#8fae8d]'
-                      : 'border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/40'
-                  }`}
-                >
-                  <span
-                    className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs"
-                    style={{ backgroundColor: `${cat.color}15`, color: cat.color }}
-                  >
-                    <IconRenderer name={cat.icon} size={15} />
-                  </span>
-                  <span className="text-[9px] font-bold font-vietnam text-zinc-600 dark:text-zinc-300 truncate w-full">
-                    {cat.name}
-                  </span>
-                </button>
-              ))}
-            </div>
+            {renderCategoryPicker()}
           </div>
 
           {/* Date Picker & Notes */}

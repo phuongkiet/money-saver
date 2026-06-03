@@ -66,8 +66,9 @@ interface AppContextType {
   updateCategory: (id: string, name: string, color: string, icon: string, budget: number, type: TransactionType) => void;
   updateCategoryBudget: (id: string, budget: number) => void;
   updateCategoryColor: (id: string, color: string) => void;
+  deleteCategory: (id: string) => void;
   // Debts
-  addDebt: (name: string, amount: number, interestRate: number, termMonths: number, startDate: string, type: DebtType, repaymentMethod: RepaymentMethod, notes?: string) => void;
+  addDebt: (name: string, amount: number, interestRate: number, termMonths: number, startDate: string, type: DebtType, repaymentMethod: RepaymentMethod, notes?: string, linkedCategoryId?: string) => void;
   toggleDebtStatus: (id: string) => void;
   deleteDebt: (id: string) => void;
   // Recurring Transactions
@@ -749,11 +750,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const wallet = wallets.find(w => w.id === rt.walletId);
         if (!wallet) break;
 
+        const cat = categories.find(c => c.id === rt.categoryId);
+        let categoryName = '';
+        if (cat) {
+          categoryName = cat.name;
+        } else if (rt.categoryId === 'transfer') {
+          categoryName = 'Chuyển khoản';
+        } else if (rt.categoryId === 'savings') {
+          categoryName = 'Tiết kiệm';
+        }
+
         newTransactions.push({
           id: `tx-rc-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
           amount: rt.amount,
           type: rt.type,
           categoryId: rt.categoryId,
+          categoryName,
           walletId: rt.walletId,
           date: currentDate,
           note: rt.note,
@@ -926,11 +938,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!walletExists) { showToast('Ví không tồn tại.', 'error'); return; }
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) { showToast('Ngày không hợp lệ.', 'error'); return; }
 
+    const cat = categories.find(c => c.id === categoryId);
+    let categoryName = '';
+    if (cat) {
+      categoryName = cat.name;
+    } else if (categoryId === 'transfer') {
+      categoryName = 'Chuyển khoản';
+    } else if (categoryId === 'savings') {
+      categoryName = 'Tiết kiệm';
+    }
+
     const newTx: Transaction = {
       id: `tx-${Date.now()}`,
       amount,
       type,
       categoryId,
+      categoryName,
       walletId,
       date,
       note: note.trim() || (type === 'income' ? 'Thu nhập khác' : 'Chi tiêu khác'),
@@ -957,6 +980,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!walletExists) { showToast('Ví không tồn tại.', 'error'); return; }
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) { showToast('Ngày không hợp lệ.', 'error'); return; }
 
+    const cat = categories.find(c => c.id === categoryId);
+    let categoryName = '';
+    if (cat) {
+      categoryName = cat.name;
+    } else if (categoryId === 'transfer') {
+      categoryName = 'Chuyển khoản';
+    } else if (categoryId === 'savings') {
+      categoryName = 'Tiết kiệm';
+    }
+
     // Revert old wallet balance
     let updatedWallets = wallets.map(w => {
       if (w.id !== oldTx.walletId) return w;
@@ -972,7 +1005,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setWallets(updatedWallets);
     setTransactions(prev => prev.map(t => t.id === id ? {
-      ...t, id, amount, type, categoryId, walletId, date,
+      ...t, id, amount, type, categoryId, categoryName, walletId, date,
       note: note.trim() || (type === 'income' ? 'Thu nhập khác' : 'Chi tiêu khác'),
       updatedAt: Date.now(),
       pendingSync: true
@@ -1043,6 +1076,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       amount,
       type: 'expense',
       categoryId: 'transfer',
+      categoryName: 'Chuyển khoản',
       walletId: fromId,
       date: new Date().toISOString().split('T')[0],
       note: `Chuyển tiền đến ${toW.name}`,
@@ -1055,6 +1089,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       amount,
       type: 'income',
       categoryId: 'transfer',
+      categoryName: 'Chuyển khoản',
       walletId: toId,
       date: new Date().toISOString().split('T')[0],
       note: `Nhận tiền từ ${fromW.name}`,
@@ -1086,7 +1121,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addCategory = (name: string, color: string, icon: string, budget: number, type: TransactionType) => {
     if (!name.trim()) { showToast('Tên danh mục không được để trống.', 'error'); return; }
     if (budget < 0) { showToast('Ngân sách không được âm.', 'error'); return; }
-    const newCat: Category = { id: `cat-${Date.now()}`, name: name.trim(), color, icon, budget, type, updatedAt: Date.now(), pendingSync: true };
+    const newCat: Category = {
+      id: `cat-${Date.now()}`,
+      name: name.trim(),
+      color,
+      icon,
+      budget,
+      type,
+      updatedAt: Date.now(),
+      pendingSync: true
+    };
     setCategories(prev => [...prev, newCat]);
   };
 
@@ -1095,7 +1139,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!cat) { showToast('Danh mục không tồn tại.', 'error'); return; }
     if (!name.trim()) { showToast('Tên danh mục không được để trống.', 'error'); return; }
     if (budget < 0) { showToast('Ngân sách không được âm.', 'error'); return; }
-    setCategories(prev => prev.map(c => c.id === id ? { ...c, name: name.trim(), color, icon, budget, type, updatedAt: Date.now(), pendingSync: true } : c));
+
+    setCategories(prev => prev.map(c => c.id === id ? {
+      ...c,
+      name: name.trim(),
+      color,
+      icon,
+      budget,
+      type,
+      updatedAt: Date.now(),
+      pendingSync: true
+    } : c));
   };
 
   const updateCategoryBudget = (id: string, budget: number) => {
@@ -1107,10 +1161,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCategories(prev => prev.map(c => c.id === id ? { ...c, color, updatedAt: Date.now(), pendingSync: true } : c));
   };
 
+  const deleteCategory = (id: string) => {
+    setCategories(prev => prev.filter(c => c.id !== id));
+    setDeletedRecords(prev => [
+      ...prev,
+      { id, table: 'categories', updatedAt: Date.now() }
+    ]);
+
+    // Gỡ liên kết của những debts trỏ tới category bị xóa
+    setDebts(prev => prev.map(d => d.linkedCategoryId === id
+      ? { ...d, linkedCategoryId: undefined, updatedAt: Date.now(), pendingSync: true }
+      : d
+    ));
+
+    showToast('Đã xóa danh mục thành công!', 'success');
+  };
+
   // ─── Debts ────────────────────────────────────────────────────────────────
   const addDebt = (
     name: string, amount: number, interestRate: number, termMonths: number,
-    startDate: string, type: DebtType, repaymentMethod: RepaymentMethod, notes?: string
+    startDate: string, type: DebtType, repaymentMethod: RepaymentMethod, notes?: string,
+    linkedCategoryId?: string
   ) => {
     if (!name.trim()) { showToast('Tên khoản nợ không được để trống.', 'error'); return; }
     if (!amount || amount <= 0) { showToast('Số tiền phải lớn hơn 0.', 'error'); return; }
@@ -1129,6 +1200,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'active',
       repaymentMethod,
       notes: notes?.trim(),
+      linkedCategoryId: linkedCategoryId || undefined,
       updatedAt: Date.now(),
       pendingSync: true
     };
@@ -1138,7 +1210,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toggleDebtStatus = (id: string) => {
     const debt = debts.find(d => d.id === id);
     if (!debt) { showToast('Khoản nợ không tồn tại.', 'error'); return; }
-    setDebts(prev => prev.map(d => d.id === id ? { ...d, status: d.status === 'active' ? 'paid' : 'active', updatedAt: Date.now(), pendingSync: true } : d));
+    const newStatus = debt.status === 'active' ? 'paid' : 'active';
+    
+    setDebts(prev => prev.map(d => d.id === id ? { ...d, status: newStatus, updatedAt: Date.now(), pendingSync: true } : d));
+
+    if (newStatus === 'paid' && debt.linkedCategoryId) {
+      deleteCategory(debt.linkedCategoryId);
+    }
   };
 
   const deleteDebt = (id: string) => {
@@ -1284,6 +1362,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       amount,
       type: 'expense',
       categoryId: 'savings',
+      categoryName: 'Tiết kiệm',
       walletId,
       date: new Date().toISOString().split('T')[0],
       note: `Tiết kiệm: ${goal.name}`,
@@ -1315,6 +1394,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       amount,
       type: 'income',
       categoryId: 'savings',
+      categoryName: 'Tiết kiệm',
       walletId,
       date: new Date().toISOString().split('T')[0],
       note: `Rút từ heo đất: ${goal.name}`,
@@ -1418,17 +1498,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const totalExpense = monthTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
 
     const categoriesMap: { [catId: string]: { name: string; budget: number; spent: number } } = {};
+
+    // Group transactions by categoryId bottom-up
+    monthTxs.forEach(t => {
+      if (t.type !== 'expense') return;
+      const catId = t.categoryId;
+      const liveCat = categories.find(c => c.id === catId);
+      const name = liveCat ? liveCat.name : (t.categoryName || 'Danh mục đã xóa');
+      const budget = liveCat ? liveCat.budget : 0;
+
+      if (!categoriesMap[catId]) {
+        categoriesMap[catId] = { name, budget, spent: 0 };
+      }
+      categoriesMap[catId].spent += t.amount;
+    });
+
+    // Also include any categories that had a budget set, even if they had 0 spending in this month
     categories.forEach(cat => {
-      const spent = monthTxs.filter(t => t.type === 'expense' && t.categoryId === cat.id).reduce((sum, t) => sum + t.amount, 0);
-      categoriesMap[cat.id] = { name: cat.name, budget: cat.budget, spent };
+      if (cat.type === 'expense' && cat.budget > 0 && !categoriesMap[cat.id]) {
+        categoriesMap[cat.id] = { name: cat.name, budget: cat.budget, spent: 0 };
+      }
     });
 
     let overBudgetCats: string[] = [];
     let safeCats: string[] = [];
-    categories.forEach(cat => {
-      const spent = categoriesMap[cat.id]?.spent || 0;
+    Object.values(categoriesMap).forEach(cat => {
       if (cat.budget > 0) {
-        if (spent > cat.budget) overBudgetCats.push(cat.name);
+        if (cat.spent > cat.budget) overBudgetCats.push(cat.name);
         else safeCats.push(cat.name);
       }
     });
@@ -1548,7 +1644,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       session, authLoading, isSyncing, lastSyncedAt, login, loginWithGoogle, register, logout, syncData,
       addTransaction, updateTransaction, deleteTransaction,
       addWallet, updateWalletBalance, transferFunds, deleteWallet,
-      addCategory, updateCategory, updateCategoryBudget, updateCategoryColor,
+      addCategory, updateCategory, updateCategoryBudget, updateCategoryColor, deleteCategory,
       addDebt, toggleDebtStatus, deleteDebt,
       addRecurringTransaction, updateRecurringTransaction, deleteRecurringTransaction,
       pauseRecurringTransaction, resumeRecurringTransaction,
