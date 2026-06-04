@@ -442,18 +442,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // B. Upload deletions
         const pendingDeletions = deletedRecords.filter(r => r.table === deletedTableKey);
         if (pendingDeletions.length > 0) {
-          const dbDeletions = pendingDeletions.map(r => ({
-            id: r.id,
-            user_id: userId,
-            is_deleted: true,
-            updated_at: r.updatedAt
-          }));
-
-          const { error: deleteError } = await supabase
-            .from(tableName)
-            .upsert(dbDeletions);
-
-          if (deleteError) throw deleteError;
+          const deletePromises = pendingDeletions.map(async (r) => {
+            const { error: deleteError } = await supabase
+              .from(tableName)
+              .update({ is_deleted: true, updated_at: r.updatedAt })
+              .eq('id', r.id)
+              .eq('user_id', userId);
+            if (deleteError) throw deleteError;
+          });
+          await Promise.all(deletePromises);
 
           setDeletedRecords(prev => prev.filter(r => !(r.table === deletedTableKey && pendingDeletions.some(pd => pd.id === r.id))));
         }
@@ -563,9 +560,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Upload deleted Ms
         const pendingMsDeletions = deletedRecords.filter(r => r.table === 'monthly_summaries');
         if (pendingMsDeletions.length > 0) {
-          const rows = pendingMsDeletions.map(r => ({ id: r.id, user_id: userId, is_deleted: true, updated_at: r.updatedAt }));
-          const { error } = await supabase.from('monthly_summaries').upsert(rows);
-          if (error) throw error;
+          const deletePromises = pendingMsDeletions.map(async (r) => {
+            const { error: deleteError } = await supabase
+              .from('monthly_summaries')
+              .update({ is_deleted: true, updated_at: r.updatedAt })
+              .eq('id', r.id)
+              .eq('user_id', userId);
+            if (deleteError) throw deleteError;
+          });
+          await Promise.all(deletePromises);
           setDeletedRecords(prev => prev.filter(r => !(r.table === 'monthly_summaries' && pendingMsDeletions.some(pd => pd.id === r.id))));
         }
 
