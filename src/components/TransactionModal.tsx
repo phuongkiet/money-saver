@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconRenderer } from './IconRenderer';
-import { X, Calendar, Wallet as WalletIcon, FolderHeart, FileText } from 'lucide-react';
+import { X, Calendar, Wallet as WalletIcon, FolderHeart, FileText, Calculator } from 'lucide-react';
 import { formatThousand, parseThousand } from '../utils/format';
+import { formatExpression, evaluateExpression } from '../utils/mathEvaluator';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -18,6 +19,35 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
   const [walletId, setWalletId] = useState<string>('');
   const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [note, setNote] = useState<string>('');
+  const [showCalculator, setShowCalculator] = useState(false);
+
+  const handleKeyPress = (key: string) => {
+    if (key === 'C') {
+      setAmount('');
+      return;
+    }
+    if (key === '⌫') {
+      let current = amount.trim();
+      if (current.length > 0) {
+        if (/[+\-×÷]\s*$/.test(current)) {
+          current = current.replace(/\s*[+\-×÷]\s*$/, '');
+        } else {
+          current = current.slice(0, -1);
+        }
+        setAmount(formatExpression(current));
+      }
+      return;
+    }
+    if (key === '✓') {
+      const finalVal = evaluateExpression(amount);
+      setAmount(formatExpression(finalVal.toString()));
+      setShowCalculator(false);
+      return;
+    }
+    
+    let nextVal = amount + key;
+    setAmount(formatExpression(nextVal));
+  };
 
   const getFilteredCategories = (t: 'expense' | 'income') => {
     return categories.filter(c => c.type === t || (t === 'expense' && !c.type));
@@ -61,7 +91,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const parsedAmount = parseThousand(amount);
+    const parsedAmount = evaluateExpression(amount);
     
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       showToast('Vui lòng nhập số tiền hợp lệ lớn hơn 0.', 'error');
@@ -196,26 +226,111 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
 
           {/* Amount Input */}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block block">
+            <label className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block">
               Số tiền giao dịch (VNĐ)
             </label>
-            <div className="relative">
+            <div className="relative flex items-center">
               <input
                 type="text"
-                inputMode="decimal"
                 required
                 value={amount}
-                onChange={(e) => setAmount(formatThousand(e.target.value))}
+                onFocus={() => setShowCalculator(true)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const sanitized = val.replace(/[^0-9+\-*/().\s×÷,]/g, '');
+                  setAmount(formatExpression(sanitized));
+                }}
                 placeholder="0"
-                className={`w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-2xl pl-4 pr-12 py-3.5 text-lg font-bold font-vietnam focus:outline-none focus:ring-2 focus:ring-[#8fae8d]/40 focus:border-[#8fae8d] ${
+                className={`w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded-2xl pl-4 pr-20 py-3.5 text-lg font-bold font-vietnam focus:outline-none focus:ring-2 focus:ring-[#8fae8d]/40 focus:border-[#8fae8d] ${
                   type === 'expense' ? 'text-rose-500 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'
                 }`}
               />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold font-vietnam text-zinc-400">
-                đ
-              </span>
+              <div className="absolute right-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCalculator(!showCalculator)}
+                  className={`p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-850 transition-all cursor-pointer ${
+                    showCalculator ? 'text-[#8fae8d]' : 'text-zinc-400'
+                  }`}
+                  title="Mở bàn phím máy tính"
+                >
+                  <Calculator size={18} />
+                </button>
+                <span className="text-xs font-bold font-vietnam text-zinc-400">
+                  đ
+                </span>
+              </div>
             </div>
+            
+            {/* Live calculation preview */}
+            {amount && /[\+\-×÷]/.test(amount) && (
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 font-vietnam uppercase tracking-wider">
+                  Tạm tính
+                </span>
+                <span className="text-xs font-extrabold text-emerald-550 dark:text-emerald-400 font-vietnam">
+                  = {formatThousand(evaluateExpression(amount))} đ
+                </span>
+              </div>
+            )}
           </div>
+
+          {/* Custom Calculator Keypad */}
+          {showCalculator && (
+            <div className="bg-zinc-100 dark:bg-zinc-950 p-3 rounded-2xl border border-zinc-200/50 dark:border-zinc-800/60 grid grid-cols-4 gap-2 shadow-inner animate-slide-up">
+              {[
+                { label: 'C', value: 'C', type: 'clear' },
+                { label: '(', value: '(', type: 'bracket' },
+                { label: ')', value: ')', type: 'bracket' },
+                { label: '÷', value: '÷', type: 'op' },
+                
+                { label: '7', value: '7', type: 'num' },
+                { label: '8', value: '8', type: 'num' },
+                { label: '9', value: '9', type: 'num' },
+                { label: '×', value: '×', type: 'op' },
+                
+                { label: '4', value: '4', type: 'num' },
+                { label: '5', value: '5', type: 'num' },
+                { label: '6', value: '6', type: 'num' },
+                { label: '-', value: '-', type: 'op' },
+                
+                { label: '1', value: '1', type: 'num' },
+                { label: '2', value: '2', type: 'num' },
+                { label: '3', value: '3', type: 'num' },
+                { label: '+', value: '+', type: 'op' },
+                
+                { label: '0', value: '0', type: 'num' },
+                { label: '000', value: '000', type: 'num' },
+                { label: '⌫', value: '⌫', type: 'back' },
+                { label: '✓', value: '✓', type: 'done' },
+              ].map((btn, idx) => {
+                let btnStyle = 'bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/50';
+                
+                if (btn.type === 'op') {
+                  btnStyle = 'bg-zinc-200/50 dark:bg-zinc-850 text-[#6f8d6d] dark:text-[#8fae8d] hover:bg-zinc-200 dark:hover:bg-zinc-800 font-bold';
+                } else if (btn.type === 'clear') {
+                  btnStyle = 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 font-bold';
+                } else if (btn.type === 'bracket') {
+                  btnStyle = 'bg-zinc-200/50 dark:bg-zinc-850 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 font-medium';
+                } else if (btn.type === 'back') {
+                  btnStyle = 'bg-zinc-200/50 dark:bg-zinc-850 text-zinc-500 dark:text-zinc-400 hover:bg-rose-500/10 hover:text-rose-500 dark:hover:hover:bg-rose-950/20 transition-colors';
+                } else if (btn.type === 'done') {
+                  btnStyle = 'bg-gradient-to-br from-[#8fae8d] to-[#6f8d6d] text-white font-bold shadow-md hover:scale-[1.03] active:scale-95 transition-all';
+                }
+                
+                return (
+                  <button
+                    type="button"
+                    key={idx}
+                    onClick={() => handleKeyPress(btn.value)}
+                    className={`py-3 rounded-xl text-xs font-vietnam font-bold flex items-center justify-center transition-all cursor-pointer select-none ${btnStyle}`}
+                  >
+                    {btn.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Wallet Selection */}
           <div className="space-y-1.5">
