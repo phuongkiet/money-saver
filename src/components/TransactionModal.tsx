@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconRenderer } from './IconRenderer';
 import { X, Calendar, Wallet as WalletIcon, FolderHeart, FileText, Calculator } from 'lucide-react';
-import { formatThousand, parseThousand } from '../utils/format';
+import { formatThousand } from '../utils/format';
 import { formatExpression, evaluateExpression } from '../utils/mathEvaluator';
 
 interface TransactionModalProps {
