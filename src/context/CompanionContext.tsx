@@ -101,6 +101,17 @@ const addDaysToDate = (dateStr: string, days: number): string => {
   return d.toISOString().split('T')[0];
 };
 
+const generateUUID = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 // Map DB row helpers
 const mapBasicInfoToDb = (info: PartnerBasicInfo, uid: string) => ({
   user_id: uid,
@@ -257,6 +268,25 @@ export const CompanionProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Load from IndexedDB
   useEffect(() => {
+    const migrateIds = <T extends { id: string; pendingSync?: boolean }>(items: T[]): T[] => {
+      return items.map(item => {
+        if (
+          item.id.startsWith('pref-') ||
+          item.id.startsWith('dislike-') ||
+          item.id.startsWith('appt-') ||
+          item.id.startsWith('date-') ||
+          item.id.startsWith('gift-')
+        ) {
+          return {
+            ...item,
+            id: generateUUID(),
+            pendingSync: true
+          };
+        }
+        return item;
+      });
+    };
+
     const loadCompanionData = async () => {
       try {
         const savedBasic = await db.get<PartnerBasicInfo>('ms_companion_basic', defaultBasicInfo);
@@ -268,12 +298,18 @@ export const CompanionProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const savedMenstrual = await db.get<MenstrualData>('ms_companion_menstrual', defaultMenstrualData);
         const savedDeletions = await db.get<DeletedRecord[]>('ms_companion_deleted_records', []);
 
+        const migratedPrefs = migrateIds(savedPrefs);
+        const migratedDislikes = migrateIds(savedDislikes);
+        const migratedAppts = migrateIds(savedAppts);
+        const migratedDates = migrateIds(savedDates);
+        const migratedGifts = migrateIds(savedGifts);
+
         setBasicInfo(savedBasic);
-        setPreferences(savedPrefs);
-        setDislikes(savedDislikes);
-        setAppointments(savedAppts);
-        setSpecialDates(savedDates);
-        setGiftIdeas(savedGifts);
+        setPreferences(migratedPrefs);
+        setDislikes(migratedDislikes);
+        setAppointments(migratedAppts);
+        setSpecialDates(migratedDates);
+        setGiftIdeas(migratedGifts);
         setMenstrualData(savedMenstrual);
         setDeletedRecords(savedDeletions);
       } catch (err) {
@@ -512,7 +548,7 @@ export const CompanionProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addPreference = (category: PartnerPreference['category'], content: string) => {
     if (!content.trim()) return;
     const newPref: PartnerPreference = {
-      id: `pref-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: generateUUID(),
       category,
       content: content.trim(),
       updatedAt: Date.now(),
@@ -529,7 +565,7 @@ export const CompanionProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addDislike = (category: PartnerDislike['category'], content: string) => {
     if (!content.trim()) return;
     const newDis: PartnerDislike = {
-      id: `dislike-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: generateUUID(),
       category,
       content: content.trim(),
       updatedAt: Date.now(),
@@ -546,7 +582,7 @@ export const CompanionProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addAppointment = (appt: Omit<PartnerAppointment, 'id'>) => {
     const newAppt: PartnerAppointment = {
       ...appt,
-      id: `appt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: generateUUID(),
       isCompleted: false,
       updatedAt: Date.now(),
       pendingSync: true
@@ -566,7 +602,7 @@ export const CompanionProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addSpecialDate = (date: Omit<SpecialDate, 'id'>) => {
     const newDate: SpecialDate = {
       ...date,
-      id: `date-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: generateUUID(),
       updatedAt: Date.now(),
       pendingSync: true
     };
@@ -585,7 +621,7 @@ export const CompanionProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addGiftIdea = (gift: Omit<GiftIdea, 'id' | 'isPurchased'>) => {
     const newGift: GiftIdea = {
       ...gift,
-      id: `gift-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: generateUUID(),
       isPurchased: false,
       updatedAt: Date.now(),
       pendingSync: true

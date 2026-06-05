@@ -4,8 +4,8 @@ import './index.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 
-// Đăng ký Service Worker cho PWA
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+// Đăng ký Service Worker cho PWA (cả dev và prod để test push notification)
+if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then(reg => console.log('Đăng ký Service Worker PWA thành công!', reg))
