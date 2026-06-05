@@ -88,3 +88,57 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
 });
+
+// Listen for push events
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  try {
+    const payload = event.data.json();
+    const title = payload.title || 'Money Saver';
+    const options = {
+      body: payload.body || 'Bạn có thông báo mới.',
+      icon: payload.icon || '/icons/icon-192.png',
+      badge: payload.badge || '/favicon.svg',
+      data: payload.data || {},
+      vibrate: [100, 50, 100],
+      tag: payload.tag || 'money-saver-notification',
+      renotify: true
+    };
+
+    event.waitUntil(
+      self.registration.showNotification(title, options)
+    );
+  } catch (err) {
+    const text = event.data.text();
+    event.waitUntil(
+      self.registration.showNotification('Money Saver', {
+        body: text,
+        icon: '/icons/icon-192.png',
+        badge: '/favicon.svg'
+      })
+    );
+  }
+});
+
+// Listen for notification clicks
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const urlToOpen = new URL('/', self.location.origin).href;
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (let i = 0; i < windowClients.length; i++) {
+        const client = windowClients[i];
+        if (client.url === urlToOpen && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});
+

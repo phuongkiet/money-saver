@@ -28,7 +28,7 @@ const compressAvatar = (file: File, maxSize: number = 150): Promise<string> => {
         if (ctx) {
           const sourceX = (width - size) / 2;
           const sourceY = (height - size) / 2;
-          
+
           ctx.drawImage(
             img,
             sourceX,
@@ -40,7 +40,7 @@ const compressAvatar = (file: File, maxSize: number = 150): Promise<string> => {
             maxSize,
             maxSize
           );
-          
+
           const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
           resolve(compressedBase64);
         } else {
@@ -54,9 +54,11 @@ const compressAvatar = (file: File, maxSize: number = 150): Promise<string> => {
 
 interface ProfileTabProps {
   onOpenAuth: () => void;
+  onOpenCompanion: () => void;
 }
 
-export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
+
+export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth, onOpenCompanion }) => {
   const {
     user, wallets, transactions, categories, debts, savingsGoals,
     recurringTransactions, theme, setTheme, updateProfile, addWallet,
@@ -72,6 +74,14 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
   const [email, setEmail] = useState(user.email || '');
   const avatar = user.avatarUrl;
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [gender, setGender] = useState<'male' | 'female'>(user.gender || 'male');
+
+  React.useEffect(() => {
+    setName(user.name);
+    setEmail(user.email || '');
+    setGender(user.gender || 'male');
+  }, [user, isEditingProfile]);
+
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -114,7 +124,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
       showToast('Vui lòng nhập địa chỉ email hợp lệ.', 'error');
       return;
     }
-    updateProfile(name.trim(), avatar, email.trim());
+    updateProfile(name.trim(), avatar, email.trim(), gender);
     setIsEditingProfile(false);
     showToast('Cập nhật hồ sơ thành công!', 'success');
   };
@@ -382,7 +392,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
       fileReader.onload = async (event) => {
         try {
           const parsed = JSON.parse(event.target?.result as string);
-          
+
           // Separate localStorage and IndexedDB data
           const idbData: Record<string, any> = {};
           Object.keys(parsed).forEach(key => {
@@ -392,9 +402,9 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
               idbData[key] = parsed[key];
             }
           });
-          
+
           await db.importAll(idbData);
-          
+
           showToast('Đã đồng bộ hóa dữ liệu sao lưu thành công! Đang tải lại...', 'success');
           setTimeout(() => {
             window.location.reload();
@@ -421,7 +431,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
     try {
       showToast('Đang nén và tối ưu ảnh đại diện...', 'info');
       const compressedBase64 = await compressAvatar(file, 150);
-      
+
       // Update profile instantly
       updateProfile(user.name, compressedBase64, user.email);
       showToast('Cập nhật ảnh đại diện thành công!', 'success');
@@ -469,6 +479,31 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
                   placeholder="example@gmail.com"
                 />
               </div>
+              <div className="space-y-0.5">
+                <label className="text-[8px] text-zinc-400 font-bold uppercase font-vietnam">Giới tính</label>
+                <div className="flex gap-1.5 p-0.5 bg-zinc-150 dark:bg-zinc-950 rounded-lg border border-zinc-200/40 dark:border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => setGender('male')}
+                    className={`flex-1 py-1 text-[10px] font-bold font-vietnam rounded-md transition-all text-center ${gender === 'male'
+                        ? 'bg-white dark:bg-zinc-800 text-[#6f8d6d] shadow-sm font-semibold'
+                        : 'text-zinc-400 dark:text-zinc-500'
+                      }`}
+                  >
+                    Nam
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGender('female')}
+                    className={`flex-1 py-1 text-[10px] font-bold font-vietnam rounded-md transition-all text-center ${gender === 'female'
+                        ? 'bg-white dark:bg-zinc-800 text-[#6f8d6d] shadow-sm font-semibold'
+                        : 'text-zinc-400 dark:text-zinc-500'
+                      }`}
+                  >
+                    Nữ
+                  </button>
+                </div>
+              </div>
               <div className="flex gap-2 pt-0.5">
                 <button
                   type="submit"
@@ -502,13 +537,41 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
         </div>
       </section>
 
+      {/* Companion entry section */}
+      <section
+        className={`border rounded-3xl p-4 shadow-[0_4px_16px_rgba(0,0,0,0.01)] transition-all cursor-pointer border-dashed flex items-center justify-between ${user.gender === 'female'
+            ? 'bg-[#B9D6F3]/15 hover:bg-[#B9D6F3]/25 text-[#2F4357] border-[#B9D6F3]/40'
+            : 'bg-[#FADADD]/15 hover:bg-[#FADADD]/25 text-[#5E3E44] border-[#FADADD]/40'
+          }`}
+        onClick={onOpenCompanion}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-lg bg-white dark:bg-zinc-800 shadow-sm shrink-0">
+            {user.gender === 'female' ? '💙' : '💕'}
+          </div>
+          <div className="min-w-0 flex-1 text-left">
+            <h3 className="text-xs font-black uppercase tracking-wider opacity-90">
+              Không gian của {user.gender === 'female' ? 'Anh ấy' : 'Em ấy'}
+            </h3>
+            <p className="text-[9px] font-bold opacity-75 mt-0.5 leading-snug">
+              {user.gender === 'female'
+                ? 'Chứa đựng toàn bộ thông tin của anh ấy.'
+                : 'Chứa đựng toàn bộ thông tin của bé cưng.'}
+            </p>
+          </div>
+        </div>
+        <div className="text-[10px] font-black shrink-0 px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-800 shadow-sm border border-zinc-100 dark:border-zinc-700 active:scale-95 transition-all">
+          Mở ngay
+        </div>
+      </section>
+
       {/* Cloud Synchronization Section */}
       <section className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-3xl p-5 shadow-[0_4px_16px_rgba(0,0,0,0.02)] space-y-4">
         <h3 className="text-sm font-bold font-vietnam text-zinc-800 dark:text-zinc-100 flex items-center gap-2">
           <Cloud size={18} className="text-[#6f8d6d] dark:text-[#8fae8d]" />
           Đồng bộ hóa Đám mây
         </h3>
-        
+
         {!session ? (
           <div className="space-y-3.5">
             <p className="text-xs font-semibold font-vietnam text-zinc-500 dark:text-zinc-400 leading-relaxed">
@@ -1076,14 +1139,14 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenAuth }) => {
       {showAvatarModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Backdrop */}
-          <div 
+          <div
             className="absolute inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-300 animate-fade-in"
             onClick={() => setShowAvatarModal(false)}
           ></div>
 
           {/* Modal Container */}
           <div className="relative w-full max-w-xs bg-white/95 dark:bg-zinc-900/95 border border-zinc-100 dark:border-zinc-800 rounded-[2.5rem] p-6 shadow-2xl space-y-4 animate-scale-up z-10 text-center backdrop-blur-lg">
-            
+
             {/* Header */}
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold font-vietnam text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">

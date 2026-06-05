@@ -91,7 +91,9 @@ export interface UserProfile {
   name: string;
   avatarUrl: string;
   email?: string;
+  gender?: 'male' | 'female';
 }
+
 
 export interface MonthlySummary extends Syncable {
   monthId: string; // e.g. "2026-05"
@@ -123,3 +125,98 @@ export interface AppState {
   user: UserProfile;
   theme: 'light' | 'dark';
 }
+
+// === Companion App Data Models ===
+
+export interface PartnerBasicInfo {
+  nickname: string;
+  birthday: string; // YYYY-MM-DD
+  shirtSize: string;
+  pantsSize: string;
+  ringSize: string;
+  notes: string;
+  updatedAt?: number;
+  pendingSync?: boolean;
+}
+
+export interface PartnerPreference {
+  id: string;
+  category: 'game' | 'sport' | 'book' | 'food' | 'music' | 'movie' | 'travel' | 'hobby' | 'other';
+  content: string;
+  updatedAt?: number;
+  pendingSync?: boolean;
+}
+
+export interface PartnerDislike {
+  id: string;
+  category: 'food' | 'drink' | 'topic' | 'behavior' | 'place' | 'other';
+  content: string;
+  updatedAt?: number;
+  pendingSync?: boolean;
+}
+
+export type AppointmentCategory = 'date' | 'anniversary' | 'health' | 'movie' | 'travel' | 'other';
+
+export interface PartnerAppointment {
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm
+  location?: string;
+  category: AppointmentCategory;
+  notes?: string;
+  isCompleted?: boolean;
+  updatedAt?: number;
+  pendingSync?: boolean;
+}
+
+export interface SpecialDate {
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD (e.g. 2020-10-15) or MM-DD
+  isRecurring: boolean; // lặp lại hằng năm
+  notes?: string;
+  updatedAt?: number;
+  pendingSync?: boolean;
+}
+
+export interface GiftIdea {
+  id: string;
+  name: string;
+  price?: number;
+  priority: 'high' | 'medium' | 'low';
+  link?: string;
+  isPurchased: boolean;
+  notes?: string;
+  updatedAt?: number;
+  pendingSync?: boolean;
+}
+
+export interface CycleEntry {
+  id: string;
+  startDate: string; // YYYY-MM-DD
+  endDate?: string;  // YYYY-MM-DD
+}
+
+export interface DailyEntry {
+  date: string; // YYYY-MM-DD
+  mood?: 'happy' | 'neutral' | 'sad' | 'irritable' | 'anxious';
+  symptoms?: ('cramps' | 'bloating' | 'headache' | 'fatigue' | 'acne' | 'tender_breasts')[];
+  notes?: string;
+}
+
+export interface MenstrualData {
+  avgCycleLength: number; // default 28
+  avgPeriodLength: number; // default 5
+  isIrregular: boolean;
+  cycleLog: CycleEntry[];
+  dailyLog: DailyEntry[];
+  // Legacy / Compatibility fields
+  lastPeriodDate?: string;
+  cycleLength?: number;
+  periodLength?: number;
+  updatedAt?: number;
+  pendingSync?: boolean;
+}
+
+

@@ -86,8 +86,9 @@ interface AppContextType {
   withdrawFromSavingsGoal: (goalId: string, walletId: string, amount: number) => void;
   // Theme & Profile
   setTheme: (theme: 'light' | 'dark') => void;
-  updateProfile: (name: string, avatarUrl: string, email?: string) => void;
+  updateProfile: (name: string, avatarUrl: string, email?: string, gender?: 'male' | 'female') => void;
   resetData: () => void;
+
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -220,6 +221,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               }
             } else {
               val = item.defaultVal;
+            }
+          }
+          if (item.dbKey === 'ms_user' && val) {
+            if (!val.gender) {
+              const onboardedGender = localStorage.getItem('ms_onboarding_gender');
+              if (onboardedGender === 'male' || onboardedGender === 'female') {
+                val = { ...val, gender: onboardedGender };
+                await db.set('ms_user', val);
+              }
             }
           }
           item.setter(val);
@@ -367,6 +377,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           name: name.trim(),
           avatar_url: defaultUser.avatarUrl,
           email,
+          gender: user.gender || localStorage.getItem('ms_onboarding_gender') || null,
           updated_at: Date.now()
         });
       }
@@ -645,7 +656,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const remoteProfile = {
           name: cloudProfile.name,
           avatarUrl: cloudProfile.avatar_url,
-          email: cloudProfile.email
+          email: cloudProfile.email,
+          gender: cloudProfile.gender
         };
         if (cloudProfile.updated_at > localProfileUpdated) {
           setUser({ ...remoteProfile, updatedAt: cloudProfile.updated_at } as any);
@@ -655,6 +667,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             name: user.name,
             avatar_url: user.avatarUrl,
             email: user.email || null,
+            gender: user.gender || null,
             updated_at: localProfileUpdated
           });
         }
@@ -664,6 +677,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           name: user.name,
           avatar_url: user.avatarUrl,
           email: user.email || null,
+          gender: user.gender || null,
           updated_at: localProfileUpdated || now
         });
       }
@@ -1442,9 +1456,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('ms_theme_updated_at', Date.now().toString());
   };
 
-  const updateProfile = (name: string, avatarUrl: string, email?: string) => {
+  const updateProfile = (name: string, avatarUrl: string, email?: string, gender?: 'male' | 'female') => {
     if (!name.trim()) { showToast('Tên không được để trống.', 'error'); return; }
-    setUser({ name: name.trim(), avatarUrl, email, updatedAt: Date.now() } as any);
+    setUser(prev => ({
+      ...prev,
+      name: name.trim(),
+      avatarUrl,
+      email,
+      gender: gender !== undefined ? gender : prev.gender,
+      updatedAt: Date.now()
+    }) as any);
   };
 
   // ─── Generate Email HTML ──────────────────────────────────────────────────

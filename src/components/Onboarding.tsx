@@ -35,10 +35,11 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     // Set default avatar based on gender
     const avatarSeed = gender === 'male' ? 'Jack' : 'Lily';
     const avatarUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${avatarSeed}`;
-    updateProfile(name.trim(), avatarUrl, email.trim());
+    updateProfile(name.trim(), avatarUrl, email.trim(), gender);
 
-    // Set onboarded flag in localStorage
+    // Set onboarded flag and gender in localStorage
     localStorage.setItem('ms_onboarded', 'true');
+    localStorage.setItem('ms_onboarding_gender', gender);
 
     // Complete
     onComplete();
