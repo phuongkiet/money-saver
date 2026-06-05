@@ -1,4 +1,4 @@
-const CACHE_NAME = 'money-saver-v2';
+const CACHE_NAME = 'money-saver-v3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -30,6 +30,11 @@ self.addEventListener('activate', (e) => {
 
 // Network-First for HTML documents, Cache-First for static assets
 self.addEventListener('fetch', (e) => {
+  // Only handle GET requests (prevents crash on POST/PUT/DELETE API requests in Safari/iOS)
+  if (e.request.method !== 'GET') {
+    return;
+  }
+
   const url = new URL(e.request.url);
 
   // For navigate requests (HTML pages) or index.html, use Network-First with Cache Fallback
