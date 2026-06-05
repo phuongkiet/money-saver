@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CompanionProvider } from '../../context/CompanionContext';
 import { CompanionDashboard } from './CompanionDashboard';
@@ -6,7 +6,13 @@ import { CompanionInfo } from './CompanionInfo';
 import { CompanionAppointments } from './CompanionAppointments';
 import { CompanionMemories } from './CompanionMemories';
 import { CompanionSettings } from './CompanionSettings';
-import { LayoutDashboard, Heart, Calendar, Gift, ArrowLeft, Settings } from 'lucide-react';
+import {
+  isPushSupported,
+  getNotificationPermissionState,
+  requestNotificationPermission,
+  subscribeUserToPush
+} from '../../utils/pushNotification';
+import { LayoutDashboard, Heart, Calendar, Gift, ArrowLeft, Settings, Bell, X } from 'lucide-react';
 
 interface CompanionAppProps {
   isOpen: boolean;
@@ -14,9 +20,55 @@ interface CompanionAppProps {
 }
 
 export const CompanionApp: React.FC<CompanionAppProps> = ({ isOpen, onClose }) => {
-  const { user } = useApp();
+  const { user, session, showToast } = useApp();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'info' | 'appointments' | 'memories' | 'settings'>('dashboard');
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+  const [notifLoading, setNotifLoading] = useState(false);
 
+  // Check notification status each time companion opens
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!isPushSupported()) return;
+    if (getNotificationPermissionState() === 'denied') return;
+
+    // Only show once per session
+    const sessionKey = 'companion-notif-prompt-shown';
+    if (sessionStorage.getItem(sessionKey)) return;
+
+    navigator.serviceWorker.ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => {
+        if (!sub) {
+          setShowNotifPrompt(true);
+          sessionStorage.setItem(sessionKey, '1');
+        }
+      })
+      .catch(() => {/* silently ignore if SW not ready */});
+  }, [isOpen]);
+
+  const handleEnableNotif = useCallback(async () => {
+    if (!session) {
+      showToast('Vui lòng đăng nhập để bật thông báo.', 'error');
+      return;
+    }
+    setNotifLoading(true);
+    try {
+      let perm = getNotificationPermissionState();
+      if (perm === 'default') {
+        perm = await requestNotificationPermission();
+      }
+      if (perm === 'granted') {
+        const ok = await subscribeUserToPush(session.user.id);
+        if (ok) showToast('Đã bật thông báo thành công! 🎉', 'success');
+        else showToast('Không thể đăng ký. Hãy thử lại trong Cài đặt.', 'error');
+      } else {
+        showToast('Quyền bị từ chối. Vui lòng cấp quyền trong cài đặt trình duyệt.', 'error');
+      }
+    } finally {
+      setNotifLoading(false);
+      setShowNotifPrompt(false);
+    }
+  }, [session, showToast]);
 
   if (!isOpen) return null;
 
@@ -160,6 +212,64 @@ export const CompanionApp: React.FC<CompanionAppProps> = ({ isOpen, onClose }) =
             <span className="text-[10px] mt-1 font-bold">Cài đặt</span>
           </button>
         </nav>
+        {/* Notification Prompt Overlay */}
+        {showNotifPrompt && (
+          <div
+            className="fixed inset-0 z-[80] flex items-end justify-center"
+            style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+            onClick={() => setShowNotifPrompt(false)}
+          >
+            <div
+              className="w-full max-w-md rounded-t-3xl p-6 pb-10 animate-slide-up"
+              style={{ backgroundColor: colors.bgCard, borderTop: `3px solid ${colors.accent}` }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Dismiss button */}
+              <button
+                onClick={() => setShowNotifPrompt(false)}
+                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full"
+                style={{ color: colors.textMuted, backgroundColor: colors.bgMain }}
+              >
+                <X size={16} />
+              </button>
+
+              {/* Icon */}
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+                style={{ backgroundColor: colors.primary }}
+              >
+                <Bell size={28} style={{ color: colors.navActive }} />
+              </div>
+
+              {/* Text */}
+              <h2 className="text-lg font-bold mb-1" style={{ color: colors.textDark }}>
+                Bật thông báo nhắc nhở
+              </h2>
+              <p className="text-sm mb-6 leading-relaxed" style={{ color: colors.textMuted }}>
+                Nhận thông báo tự động về lịch hẹn, kỷ niệm quan trọng và kỳ kinh ngay cả khi app đóng.
+              </p>
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowNotifPrompt(false)}
+                  className="flex-1 py-3 rounded-2xl text-sm font-semibold transition-all"
+                  style={{ backgroundColor: colors.bgMain, color: colors.textMuted }}
+                >
+                  Để sau
+                </button>
+                <button
+                  onClick={handleEnableNotif}
+                  disabled={notifLoading}
+                  className="flex-1 py-3 rounded-2xl text-sm font-bold transition-all active:scale-95 disabled:opacity-60"
+                  style={{ backgroundColor: colors.navActive, color: '#FFFFFF' }}
+                >
+                  {notifLoading ? 'Đang bật...' : 'Bật ngay 🔔'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </CompanionProvider>
   );

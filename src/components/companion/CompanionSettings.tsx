@@ -82,7 +82,13 @@ export const CompanionSettings: React.FC = () => {
           setIsNotificationsEnabled(true);
           showToast('Đã bật nhận thông báo thành công! 🎉', 'success');
         } else {
-          showToast('Không thể bật thông báo. Vui lòng thử lại sau.', 'error');
+          // Re-check SW subscription even if Supabase save failed
+          try {
+            const reg = await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.getSubscription();
+            setIsNotificationsEnabled(!!sub);
+          } catch {/* ignore */}
+          showToast('Không thể lưu đăng ký lên server. Hãy thử lại sau.', 'error');
         }
       }
     } catch (err) {
@@ -153,11 +159,13 @@ export const CompanionSettings: React.FC = () => {
               <div>
                 <span className="font-black text-[var(--theme-text-dark)] block">Trạng thái thông báo</span>
                 <span className="text-[10px] text-[var(--theme-text-muted)] font-medium">
-                  {permission === 'denied' 
-                    ? 'Bị chặn bởi trình duyệt' 
-                    : isNotificationsEnabled 
-                      ? 'Đang hoạt động' 
-                      : 'Đang tắt'}
+                  {permission === 'denied'
+                    ? '🚫 Bị chặn bởi trình duyệt'
+                    : isNotificationsEnabled
+                      ? '✅ Đang hoạt động'
+                      : permission === 'granted'
+                        ? '⚠️ Đã cấp quyền, chưa đăng ký'
+                        : '⭕ Chưa bật'}
                 </span>
               </div>
 
